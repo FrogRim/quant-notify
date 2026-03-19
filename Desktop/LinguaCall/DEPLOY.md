@@ -25,11 +25,12 @@
 postgresql://postgres:[PASSWORD]@db.[PROJECT_ID].supabase.co:5432/postgres
 ```
 
-3. **SQL Editor** 에서 아래 두 파일을 순서대로 붙여넣고 실행
+3. **SQL Editor** 에서 아래 파일들을 순서대로 붙여넣고 실행
 
 ```
 packages/db/migrations/20260313_phase1_init.sql
 packages/db/migrations/20260313_phase1_rls.sql
+packages/db/migrations/20260318_accuracy_policy_v1.sql
 ```
 
 4. **plans 테이블 시드 데이터** 입력 (SQL Editor)
@@ -76,7 +77,7 @@ Railway 대시보드 → **Variables** 탭에서 아래 항목 입력:
 ```
 DATABASE_URL                        = postgresql://postgres:...@db.xxx.supabase.co:5432/postgres
 OPENAI_API_KEY                      = sk-proj-...
-OPENAI_REALTIME_MODEL               = gpt-4o-realtime-preview
+OPENAI_REALTIME_MODEL               = gpt-realtime
 OPENAI_REALTIME_VOICE               = alloy
 OPENAI_REALTIME_TRANSCRIPTION_MODEL = gpt-4o-mini-transcribe
 OPENAI_REALTIME_SESSION_URL         = https://api.openai.com/v1/realtime/sessions
@@ -173,4 +174,5 @@ Railway가 자동 재배포 → 완료.
 | 통화 시작 시 에러 | `OPENAI_API_KEY` 누락 | Railway Variables 확인 |
 | 페이지 새로고침 시 404 | Vercel rewrite 미적용 | `apps/web/vercel.json` 확인 |
 | 예약 세션 미동작 | `ENABLE_WORKER_BATCH_LOOP` 누락 | Railway 에 `true` 추가 |
-| 통화 즉시 실패 | 잘못된 OpenAI 모델명 | `gpt-4o-realtime-preview` 확인 |
+| 통화 즉시 실패 | 잘못된 OpenAI 모델명 | `gpt-realtime` 확인 |
+| Start Call 즉시 400 / `unable_to_initiate_call` | 최신 DB migration 누락 | `20260318_accuracy_policy_v1.sql` 실행 |

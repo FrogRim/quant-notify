@@ -1,3 +1,5 @@
+import { SessionAccuracyPolicy } from "@lingua/shared";
+
 const readEnv = (value?: string): string | undefined => {
   const normalized = (value ?? "").trim();
   return normalized.length > 0 ? normalized : undefined;
@@ -49,18 +51,7 @@ export type CreateOpenAIRealtimeSessionInput = {
   topic: string;
   level: string;
   durationMinutes: number;
-  accuracyPolicy?: {
-    topicLockEnabled: boolean;
-    explicitTopicSwitchRequired: boolean;
-    correctionMode: "light_inline";
-    maxAssistantSentences: number;
-    maxAssistantQuestionsPerTurn: number;
-    enforceTopicRetention: boolean;
-    enforceIntentAlignment: boolean;
-    enforceCorrectionRelevance: boolean;
-    forbiddenDomainHints: string[];
-    allowedSubtopicHints: string[];
-  };
+  accuracyPolicy?: SessionAccuracyPolicy;
 };
 
 export type OpenAIRealtimeSession = {
@@ -69,83 +60,114 @@ export type OpenAIRealtimeSession = {
   model: string;
 };
 
+const buildGermanInstructions = (input: CreateOpenAIRealtimeSessionInput) => {
+  const { topic, level, durationMinutes, accuracyPolicy } = input;
+  const parts = [
+    "Du bist LinguaCall, ein Sprachpartner fuer die Goethe-Zertifikat-B2-Sprechpruefung.",
+    "Fuehre das Gespraech ausschliesslich auf Deutsch.",
+    "Bleibe beim aktuellen Thema und wechsle das Thema nur, wenn der Lernende das ausdruecklich verlangt.",
+    `Thema der Sitzung: ${topic}.`,
+    `Sprachniveau des Lernenden: ${level}, Ziel Goethe B2.`,
+    `Sitzungsdauer: ${durationMinutes} Minuten.`,
+    `Verwende hoechstens ${accuracyPolicy?.maxAssistantSentences ?? 3} kurze Saetze pro Antwort.`,
+    `Stelle hoechstens ${accuracyPolicy?.maxAssistantQuestionsPerTurn ?? 1} Frage pro Antwort.`,
+    "Sprich etwas langsamer als normales Alltagsdeutsch und mache zwischen Saetzen eine kurze Pause.",
+    "Wenn du korrigierst, beziehe dich direkt auf den letzten Satz des Lernenden und halte die Korrektur knapp.",
+    "Wenn du unsicher bist, stelle eine kurze Rueckfrage statt zu raten."
+  ];
+  if (accuracyPolicy?.allowedSubtopicHints.length) {
+    parts.push(`Bevorzuge diese Teilthemen, wenn sie passen: ${accuracyPolicy.allowedSubtopicHints.join(", ")}.`);
+  }
+  if (accuracyPolicy?.forbiddenDomainHints.length) {
+    parts.push(`Vermeide unpassende Themenwechsel wie: ${accuracyPolicy.forbiddenDomainHints.join(", ")}.`);
+  }
+  return parts.join(" ");
+};
+
+const buildChineseInstructions = (input: CreateOpenAIRealtimeSessionInput) => {
+  const { topic, level, durationMinutes } = input;
+  return [
+    "?ãÀ LinguaCall£¬ìéêÈ?ñ¼éÍ HSK 5 Ï¢???îÜñéÙş???Úá¡£",
+    "?îïïïŞÅéÄÜÅ÷×?¡£",
+    "ÜÁò¥?îññ«?£¬ğ¶Şª??íºÙ¥?é©Ï´??¡£",
+    `Üâó­??ñ«?£º${topic}¡£`,
+    `??íºâ©øÁ£º${level}£¬ÙÍ? HSK 5¡£`,
+    `????£º${durationMinutes} İÂ?¡£`,
+    "?Û¯Ø·?áÜ£¬ŞÅéÄ?Ó­Ï£í­£¬ØßÏ£?ñı?×ºõóìé??Ó­îÜïÎ?¡£",
+    "åıÍıé©?ïá??£¬?ñş????íº????îÜ?£¬?Ó­?Ù¥??õóí»æÔøú?¡£",
+    "åıÍıÜô?ïÒ£¬?à»õÚ?£¬Üôé©ãÄ?¡£"
+  ].join(" ");
+};
+
+const buildSpanishInstructions = (input: CreateOpenAIRealtimeSessionInput) => {
+  const { topic, level, durationMinutes, accuracyPolicy } = input;
+  const parts = [
+    "Eres LinguaCall, un companero de practica oral orientado al examen DELE B1.",
+    "Manten toda la conversacion en espanol.",
+    "Manten el tema actual y no cambies de tema salvo que el estudiante lo pida de forma explicita.",
+    `Tema de la sesion: ${topic}.`,
+    `Nivel del estudiante: ${level}, objetivo DELE B1.`,
+    `Duracion de la sesion: ${durationMinutes} minutos.`,
+    `Usa como maximo ${accuracyPolicy?.maxAssistantSentences ?? 3} frases cortas por turno.`,
+    `Haz como maximo ${accuracyPolicy?.maxAssistantQuestionsPerTurn ?? 1} pregunta por turno.`,
+    "Habla un poco mas despacio de lo normal y deja una breve pausa entre frases.",
+    "Si corriges, relaciona la correccion directamente con la ultima frase del estudiante.",
+    "Si no estas seguro, haz una pregunta breve de aclaracion."
+  ];
+  if (accuracyPolicy?.allowedSubtopicHints.length) {
+    parts.push(`Prefiere estas pistas de subtema cuando encajen: ${accuracyPolicy.allowedSubtopicHints.join(", ")}.`);
+  }
+  if (accuracyPolicy?.forbiddenDomainHints.length) {
+    parts.push(`Evita desviarte hacia dominios no relacionados como: ${accuracyPolicy.forbiddenDomainHints.join(", ")}.`);
+  }
+  return parts.join(" ");
+};
+
+const buildEnglishInstructions = (input: CreateOpenAIRealtimeSessionInput) => {
+  const { topic, level, durationMinutes, accuracyPolicy } = input;
+  const rules = [
+    "You are LinguaCall, a live English speaking practice partner for OPIC preparation.",
+    `Keep the learner on the current topic: ${topic}.`,
+    `Target learner level: ${level}.`,
+    `Target session duration: ${durationMinutes} minutes.`,
+    "Stay concise and interactive.",
+    "Speak slightly slower than natural conversational speed and leave a short pause between sentences.",
+    `Use at most ${accuracyPolicy?.maxAssistantSentences ?? 3} sentences per turn.`,
+    `Ask at most ${accuracyPolicy?.maxAssistantQuestionsPerTurn ?? 1} question per turn.`,
+    "Do not switch to a new topic unless the learner explicitly asks to change the topic.",
+    "Respond to the learner's latest utterance before introducing any follow-up.",
+    "If you give a correction, keep it light and connect it directly to the learner's latest sentence.",
+    "If you are unsure, ask a clarifying question instead of guessing."
+  ];
+  if (accuracyPolicy?.allowedSubtopicHints.length) {
+    rules.push(`Prefer these subtopic cues when useful: ${accuracyPolicy.allowedSubtopicHints.join(", ")}.`);
+  }
+  if (accuracyPolicy?.forbiddenDomainHints.length) {
+    rules.push(`Avoid drifting into unrelated domains such as: ${accuracyPolicy.forbiddenDomainHints.join(", ")}.`);
+  }
+  return rules.join(" ");
+};
+
 export const buildInstructions = (input: CreateOpenAIRealtimeSessionInput) => {
-  const { language, exam, topic, level, durationMinutes, accuracyPolicy } = input;
+  const { language, exam } = input;
 
   if (language === "de" && exam === "goethe_b2") {
-    return [
-      "Du bist LinguaCall, ein Deutschlernpartner fÃ¼r die Goethe-Zertifikat B2 PrÃ¼fung.",
-      "FÃ¼hre das GesprÃ¤ch ausschlieÃŸlich auf Deutsch.",
-      "Konzentriere dich auf den Sprechen-Teil der Goethe B2 PrÃ¼fung:",
-      "  - Monologisches Sprechen: KurzprÃ¤sentation zu einem Thema (ca. 3â€“4 Min.)",
-      "  - Dialogisches Sprechen: Diskussion und gemeinsame AufgabenlÃ¶sung",
-      "  - Reaktion auf eine Aussage oder ein Schaubild",
-      `Thema der Sitzung: ${topic}.`,
-      `Sprachniveau des Lernenden: ${level} (Ziel: B2).`,
-      `Sitzungsdauer: ${durationMinutes} Minuten.`,
-      "Korrigiere Fehler behutsam und direkt nach dem Satz des Lernenden.",
-      "Gib nach der Korrektur sofort eine korrekte Beispielformulierung.",
-      "Bewerte am Ende Aussprache, Grammatik, Wortschatz und FlÃ¼ssigkeit kurz auf Deutsch.",
-      "Halte das GesprÃ¤ch aktiv: Stelle RÃ¼ckfragen, um den Lernenden zum Sprechen zu motivieren."
-    ].join(" ");
+    return buildGermanInstructions(input);
   }
 
   if (language === "zh" && exam === "hsk5") {
-    return [
-      "ä½ æ˜¯LinguaCallï¼Œä¸€ä½ä¸“æ³¨äºHSK 5çº§å£è¯­ç»ƒä¹ çš„æ±‰è¯­è¾…å¯¼ä¼™ä¼´ã€‚",
-      "è¯·å…¨ç¨‹ä½¿ç”¨æ™®é€šè¯è¿›è¡Œå¯¹è¯ã€‚",
-      `æœ¬æ¬¡ç»ƒä¹ ä¸»é¢˜ï¼š${topic}ã€‚`,
-      `å­¦ä¹ è€…æ°´å¹³ï¼š${level}ï¼ˆç›®æ ‡ï¼šHSK 5çº§ï¼‰ã€‚`,
-      `ç»ƒä¹ æ—¶é•¿ï¼š${durationMinutes}åˆ†é’Ÿã€‚`,
-      "è¯·è½»æŸ”åœ°çº æ­£è¯­æ³•å’Œç”¨è¯é”™è¯¯ï¼Œå¹¶ç«‹å³ç»™å‡ºæ­£ç¡®ç¤ºä¾‹ã€‚",
-      "å¤šæé—®ï¼Œä¿æŒå¯¹è¯æµç•…ï¼Œé¼“åŠ±å­¦ä¹ è€…å¤šå¼€å£è¡¨è¾¾ã€‚"
-    ].join(" ");
+    return buildChineseInstructions(input);
   }
 
   if (language === "es" && exam === "dele_b1") {
-    return [
-      "Eres LinguaCall, un compaÃ±ero de prÃ¡ctica de espaÃ±ol oral orientado al examen DELE B1.",
-      "MantÃ©n la conversaciÃ³n completamente en espaÃ±ol.",
-      `Tema de la sesiÃ³n: ${topic}.`,
-      `Nivel del estudiante: ${level} (objetivo: DELE B1).`,
-      `DuraciÃ³n de la sesiÃ³n: ${durationMinutes} minutos.`,
-      "Corrige los errores con suavidad justo despuÃ©s de cada frase y proporciona la forma correcta.",
-      "Haz preguntas para mantener al estudiante hablando de forma activa."
-    ].join(" ");
+    return buildSpanishInstructions(input);
   }
 
-  // Default: English / OPIC
   if (language === "en" && exam === "opic") {
-    const rules = [
-      "You are LinguaCall, a live English speaking practice partner for OPIC preparation.",
-      `Keep the learner on the current topic: ${topic}.`,
-      `Target learner level: ${level}.`,
-      `Target session duration: ${durationMinutes} minutes.`,
-      "Stay concise and interactive.",
-      `Use at most ${accuracyPolicy?.maxAssistantSentences ?? 3} sentences per turn.`,
-      `Ask at most ${accuracyPolicy?.maxAssistantQuestionsPerTurn ?? 1} question per turn.`,
-      "Do not switch to a new topic unless the learner explicitly asks to change the topic.",
-      "Respond to the learner's latest utterance before introducing any follow-up.",
-      "If you give a correction, keep it light and connect it directly to the learner's latest sentence.",
-      "If you are unsure, ask a clarifying question instead of guessing."
-    ];
-    if (accuracyPolicy?.allowedSubtopicHints.length) {
-      rules.push(`Prefer these subtopic cues when useful: ${accuracyPolicy.allowedSubtopicHints.join(", ")}.`);
-    }
-    if (accuracyPolicy?.forbiddenDomainHints.length) {
-      rules.push(`Avoid drifting into unrelated domains such as: ${accuracyPolicy.forbiddenDomainHints.join(", ")}.`);
-    }
-    return rules.join(" ");
+    return buildEnglishInstructions(input);
   }
 
-  return [
-    "You are LinguaCall, a live English speaking practice partner for OPIC exam preparation.",
-    "Keep the conversation natural, concise, and interactive.",
-    `Target topic: ${topic}.`,
-    `Target level: ${level}.`,
-    `Session duration target: ${durationMinutes} minutes.`,
-    "Correct lightly during the conversation and keep the learner speaking."
-  ].join(" ");
+  return buildEnglishInstructions(input);
 };
 
 export const createOpenAIRealtimeSession = async (
@@ -170,13 +192,15 @@ export const createOpenAIRealtimeSession = async (
     body: JSON.stringify({
       model,
       voice,
+      speed: 0.9,
       modalities: ["audio", "text"],
       instructions: buildInstructions(input),
       input_audio_transcription: {
         model: transcriptionModel
       },
       turn_detection: {
-        type: "server_vad"
+        type: "server_vad",
+        silence_duration_ms: 900
       }
     })
   });

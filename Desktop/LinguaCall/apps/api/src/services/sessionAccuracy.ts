@@ -8,13 +8,11 @@ import {
 
 const VALIDATION_VERSION = "accuracy-v1";
 
-const tokenize = (value: string): string[] =>
-  value
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .map((token) => token.trim())
-    .filter(Boolean);
+const tokenize = (value: string): string[] => {
+  const normalized = value.normalize("NFKC").toLowerCase();
+  const matches = normalized.match(/\p{Script=Han}|[\p{L}\p{N}]+/gu);
+  return matches?.map((token) => token.trim()).filter(Boolean) ?? [];
+};
 
 const uniqueTokens = (value: string): Set<string> => new Set(tokenize(value));
 
@@ -42,10 +40,22 @@ const overlapScore = (left: Set<string>, right: Set<string>): number => {
 };
 
 const DEFAULT_FORBIDDEN_BY_TOPIC: Array<{ match: string[]; hints: string[] }> = [
-  { match: ["hospital", "doctor", "clinic", "symptom", "medicine"], hints: ["bank", "loan", "mortgage", "account", "investment"] },
-  { match: ["bank", "finance", "loan", "account", "money"], hints: ["hospital", "doctor", "clinic", "symptom", "medicine"] },
-  { match: ["interview", "job", "career", "resume"], hints: ["hospital", "clinic", "symptom", "surgery"] },
-  { match: ["travel", "trip", "airport", "hotel"], hints: ["mortgage", "loan", "investment", "surgery"] }
+  {
+    match: ["hospital", "doctor", "clinic", "symptom", "medicine", "krankenhaus", "arzt", "klinik", "sintoma", "sintoma", "medico", "medico", "?ßæ", "?êÂ", "ñø?"],
+    hints: ["bank", "loan", "mortgage", "account", "investment", "kredit", "konto", "banco", "prestamo", "prestamo", "cuenta", "?ú¼", "?Î³", "??"]
+  },
+  {
+    match: ["bank", "finance", "loan", "account", "money", "kredit", "konto", "banco", "prestamo", "prestamo", "cuenta", "?ú¼", "?Î³", "??"],
+    hints: ["hospital", "doctor", "clinic", "symptom", "medicine", "krankenhaus", "arzt", "klinik", "sintoma", "sintoma", "medico", "medico", "?ßæ", "?êÂ", "ñø?"]
+  },
+  {
+    match: ["interview", "job", "career", "resume", "bewerbung", "vorstellungsgesprach", "vorstellungsgesprach", "entrevista", "trabajo", "Øü?", "ÍïíÂ"],
+    hints: ["hospital", "clinic", "symptom", "surgery", "krankenhaus", "klinik", "cirugia", "cirugia", "?êÂ", "â¢?"]
+  },
+  {
+    match: ["travel", "trip", "airport", "hotel", "reise", "flughafen", "viaje", "aeropuerto", "Õéú¼", "Ïõ?", "ñÐïÁ"],
+    hints: ["mortgage", "loan", "investment", "surgery", "hypothek", "kredit", "investition", "prestamo", "prestamo", "inversion", "inversion", "?Î³", "÷á?", "â¢?"]
+  }
 ];
 
 const CORRECTION_HINTS = [
@@ -54,39 +64,72 @@ const CORRECTION_HINTS = [
   "more natural",
   "instead of",
   "better to say",
-  "you should say"
+  "you should say",
+  "du kannst sagen",
+  "naturlicher ist",
+  "naturlicher ist",
+  "besser ist",
+  "podrias decir",
+  "podrias decir",
+  "mas natural",
+  "mas natural",
+  "mejor seria",
+  "mejor seria",
+  "?Ê¦ì¤?",
+  "ÌÚí»æÔîÜ?Ûö",
+  "ÌÚû¿îÜøú?"
 ];
 
 export const buildSessionAccuracyPolicy = (session: Pick<Session, "language" | "exam" | "topic">): SessionAccuracyPolicy => {
-  if (session.language !== "en" || session.exam !== "opic") {
-    return {
-      topicLockEnabled: false,
-      explicitTopicSwitchRequired: false,
-      correctionMode: "light_inline",
-      maxAssistantSentences: 4,
-      maxAssistantQuestionsPerTurn: 2,
-      enforceTopicRetention: false,
-      enforceIntentAlignment: false,
-      enforceCorrectionRelevance: false,
-      forbiddenDomainHints: [],
-      allowedSubtopicHints: []
-    };
-  }
+  const supportsStrictAccuracy =
+    (session.language === "en" && session.exam === "opic") ||
+    (session.language === "de" && session.exam === "goethe_b2") ||
+    (session.language === "es" && session.exam === "dele_b1");
 
   const topicTokens = tokenize(session.topic);
   const forbiddenDomainHints =
     DEFAULT_FORBIDDEN_BY_TOPIC.find((entry) => entry.match.some((token) => topicTokens.includes(token)))?.hints ?? [];
 
+  if (supportsStrictAccuracy) {
+    return {
+      topicLockEnabled: true,
+      explicitTopicSwitchRequired: true,
+      correctionMode: "light_inline",
+      maxAssistantSentences: 3,
+      maxAssistantQuestionsPerTurn: 1,
+      enforceTopicRetention: true,
+      enforceIntentAlignment: true,
+      enforceCorrectionRelevance: true,
+      forbiddenDomainHints,
+      allowedSubtopicHints: topicTokens.slice(0, 8)
+    };
+  }
+
+  if (session.language === "zh" && session.exam === "hsk5") {
+    return {
+      topicLockEnabled: true,
+      explicitTopicSwitchRequired: true,
+      correctionMode: "light_inline",
+      maxAssistantSentences: 3,
+      maxAssistantQuestionsPerTurn: 1,
+      enforceTopicRetention: true,
+      enforceIntentAlignment: false,
+      enforceCorrectionRelevance: false,
+      forbiddenDomainHints,
+      allowedSubtopicHints: topicTokens.slice(0, 8)
+    };
+  }
+
   return {
-    topicLockEnabled: true,
-    explicitTopicSwitchRequired: true,
+    topicLockEnabled: false,
+    explicitTopicSwitchRequired: false,
     correctionMode: "light_inline",
-    maxAssistantSentences: 3,
-    maxAssistantQuestionsPerTurn: 1,
-    enforceTopicRetention: true,
-    enforceIntentAlignment: true,
-    enforceCorrectionRelevance: true,
-    forbiddenDomainHints,
+    maxAssistantSentences: 4,
+    maxAssistantQuestionsPerTurn: 2,
+    enforceTopicRetention: false,
+    enforceIntentAlignment: false,
+    enforceCorrectionRelevance: false,
+    forbiddenDomainHints: [],
     allowedSubtopicHints: topicTokens.slice(0, 8)
   };
 };
@@ -120,7 +163,6 @@ export const validateCompletedTranscript = (
 
   const flags: string[] = [];
   const topicTokens = uniqueTokens(session.topic);
-  const userTurns = transcript.filter((segment) => segment.role === "user" && segment.content.trim().length > 0);
   const assistantTurns = transcript.filter((segment) => segment.role === "assistant" && segment.content.trim().length > 0);
 
   let driftScore = 1;
@@ -186,4 +228,3 @@ export const validateCompletedTranscript = (
 
 export const toAccuracyState = (result: AccuracyValidationResult): SessionAccuracyState =>
   buildAccuracyState(result);
-
