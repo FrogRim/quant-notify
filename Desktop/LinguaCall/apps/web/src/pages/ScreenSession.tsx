@@ -219,16 +219,16 @@ export default function ScreenSession() {
 
   const makeApi = useCallback(() => apiClient(clerkUserId), [clerkUserId]);
 
-  const loadSessions = useCallback(async () => {
+  const loadSessions = useCallback(async (showLoading = true) => {
     const api = makeApi();
-    setSessionsLoading(true);
+    if (showLoading) setSessionsLoading(true);
     try {
       const list = await api.get<Session[]>('/sessions');
       setSessions(list);
     } catch {
       setGlobalMessage('failed to load sessions');
     } finally {
-      setSessionsLoading(false);
+      if (showLoading) setSessionsLoading(false);
     }
   }, [makeApi]);
 
@@ -256,26 +256,29 @@ export default function ScreenSession() {
     void loadSessions();
   }, [loadDurationOptions, loadSessions]);
 
+  const sessionsRef = useRef<Session[]>([]);
   useEffect(() => {
-    const shouldPoll =
-      sessions.some(
-        session =>
-          ACTIVE_SESSION_STATUSES.includes(session.status) ||
-          session.reportStatus === 'pending'
-      ) || !!activeSession;
+    sessionsRef.current = sessions;
+  }, [sessions]);
 
-    if (!shouldPoll) {
-      return;
-    }
-
+  useEffect(() => {
     const interval = window.setInterval(() => {
-      void loadSessions();
+      const shouldPoll =
+        sessionsRef.current.some(
+          session =>
+            ACTIVE_SESSION_STATUSES.includes(session.status) ||
+            session.reportStatus === 'pending'
+        ) || !!activeRef.current;
+
+      if (shouldPoll) {
+        void loadSessions(false);
+      }
     }, SESSION_POLL_INTERVAL_MS);
 
     return () => {
       window.clearInterval(interval);
     };
-  }, [sessions, activeSession, loadSessions]);
+  }, [loadSessions]);
 
   const syncActive = (next: ActiveWebVoiceSession | null) => {
     activeRef.current = next;
