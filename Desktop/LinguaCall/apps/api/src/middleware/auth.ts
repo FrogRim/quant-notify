@@ -1,18 +1,19 @@
 import { NextFunction, Request, Response } from "express";
+import { getAuth } from "@clerk/express";
 
 export interface AuthenticatedRequest extends Request {
   clerkUserId: string;
 }
 
 export function requireClerkUser(req: Request, res: Response, next: NextFunction) {
-  const clerkUserId = req.header("x-clerk-user-id");
-  if (!clerkUserId) {
+  const { userId } = getAuth(req);
+  if (!userId) {
     res.status(401).json({
       ok: false,
-      error: { code: "forbidden", message: "x-clerk-user-id header is required" }
+      error: { code: "forbidden", message: "authentication required" }
     });
     return;
   }
-  (req as AuthenticatedRequest).clerkUserId = clerkUserId;
+  (req as AuthenticatedRequest).clerkUserId = userId;
   next();
 }

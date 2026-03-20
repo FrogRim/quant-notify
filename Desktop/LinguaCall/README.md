@@ -169,6 +169,111 @@ pnpm test         # vitest run (53 cases)
 
 ---
 
+## External Services
+
+| Service | Role | Free Tier |
+|---|---|---|
+| [Clerk](https://clerk.com) | JWT Auth · Google/Kakao OAuth | MAU 10,000 무료 |
+| [Supabase](https://supabase.com) | PostgreSQL · RLS | 500 MB · 50K req/월 무료 |
+| [Railway](https://railway.app) | API 서버 호스팅 | $5 크레딧/월 포함 |
+| [Vercel](https://vercel.com) | 프론트엔드 호스팅 | Hobby 플랜 무료 |
+| [OpenAI](https://platform.openai.com) | Realtime API · 평가 모델 | 종량제 (과금 발생) |
+| [Toss Payments](https://developers.tosspayments.com) | 한국 결제 | 거래 수수료만 부과 |
+| [Stripe](https://stripe.com) | 글로벌 결제 | 거래 수수료만 부과 |
+| [Sentry](https://sentry.io) | 에러 모니터링 | 5,000 이벤트/월 무료 |
+
+---
+
+## Environment Variables
+
+### Railway (API 서버)
+
+| 변수명 | 설명 | 출처 |
+|---|---|---|
+| `DATABASE_URL` | Supabase PostgreSQL 연결 문자열 | Supabase → Settings → Database → URI |
+| `NODE_ENV` | `production` | 고정값 |
+| `PUBLIC_BASE_URL` | 프론트 URL | Vercel 배포 URL |
+| `APP_BASE_URL` | 프론트 URL | 위와 동일 |
+| `API_BASE_URL` | API 서버 URL | Railway 서비스 URL |
+| `CLERK_PUBLISHABLE_KEY` | Clerk 공개키 | Clerk 대시보드 → API Keys |
+| `CLERK_SECRET_KEY` | Clerk 비밀키 | Clerk 대시보드 → API Keys |
+| `OPENAI_API_KEY` | OpenAI API 키 | OpenAI 대시보드 |
+| `OPENAI_REALTIME_MODEL` | `gpt-4o-realtime-preview` | 고정값 |
+| `OPENAI_REALTIME_VOICE` | `alloy` | 고정값 |
+| `OPENAI_REALTIME_TRANSCRIPTION_MODEL` | `gpt-4o-mini-transcribe` | 고정값 |
+| `OPENAI_REALTIME_SESSION_URL` | `https://api.openai.com/v1/realtime/sessions` | 고정값 |
+| `OPENAI_EVAL_MODEL` | `gpt-4o-mini` | 고정값 |
+| `OPENAI_EVAL_URL` | `https://api.openai.com/v1/chat/completions` | 고정값 |
+| `ALLOWED_ORIGINS` | 허용할 프론트 도메인 (콤마 구분) | Vercel 배포 URL |
+| `TOSS_CLIENT_KEY` | Toss 클라이언트 키 | Toss Payments 대시보드 |
+| `TOSS_SECRET_KEY` | Toss 비밀 키 | Toss Payments 대시보드 |
+| `STRIPE_SECRET_KEY` | Stripe 비밀 키 | Stripe 대시보드 |
+| `BILLING_WEBHOOK_SECRET_STRIPE` | Stripe Webhook 시크릿 | Stripe 대시보드 |
+| `SENTRY_DSN` | Sentry DSN (API) | Sentry 프로젝트 설정 |
+| `ENABLE_WORKER_BATCH_LOOP` | `true` | 고정값 |
+| `WORKER_BATCH_INTERVAL_MS` | `30000` | 고정값 |
+
+### Vercel (프론트엔드)
+
+| 변수명 | 설명 | 출처 |
+|---|---|---|
+| `VITE_CLERK_PUBLISHABLE_KEY` | Clerk 공개키 | Clerk 대시보드 → API Keys |
+| `VITE_SENTRY_DSN` | Sentry DSN (Web) | Sentry 프로젝트 설정 |
+| `VITE_API_BASE_URL` | API 서버 URL | Railway 서비스 URL |
+
+---
+
+## External Setup Checklist
+
+### Clerk
+- [ ] 앱 생성 (Production 환경)
+- [ ] Google OAuth 활성화 (Social Connections)
+- [ ] Kakao OAuth 활성화 (Custom OAuth Provider)
+  - Authorization URL: `https://kauth.kakao.com/oauth/authorize`
+  - Token URL: `https://kauth.kakao.com/oauth/token`
+  - Userinfo URL: `https://kapi.kakao.com/v2/user/me`
+  - Discovery Endpoint: **OFF**
+- [ ] 허용 도메인에 Vercel URL 추가
+- [ ] `CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` 복사
+
+### Supabase
+- [ ] `packages/db/migrations/20260321_phone_otp.sql` 실행 (phone_verifications 테이블)
+- [ ] `DATABASE_URL` 복사 (Settings → Database → Connection string → URI)
+
+### Sentry
+- [ ] 프로젝트 2개 생성: `linguacall-api`, `linguacall-web`
+- [ ] 각 DSN 복사 → `SENTRY_DSN`, `VITE_SENTRY_DSN`
+
+### Toss Payments
+- [ ] 사업자 등록 후 상점 ID 발급
+- [ ] Webhook URL 등록: `https://your-api.up.railway.app/billing/webhooks/toss`
+- [ ] 테스트 키 확인 후 `TOSS_CLIENT_KEY`, `TOSS_SECRET_KEY` 설정
+
+### Stripe (글로벌 결제)
+- [ ] Webhook 엔드포인트 등록: `https://your-api.up.railway.app/billing/webhooks/stripe`
+- [ ] `STRIPE_SECRET_KEY`, `BILLING_WEBHOOK_SECRET_STRIPE` 설정
+
+### OpenAI
+- [ ] API 키 발급
+- [ ] 월 한도 설정 권장: OpenAI 대시보드 → Settings → Limits → Hard limit
+
+---
+
+## Billing Overview
+
+> OpenAI만 사용량에 따라 실시간 과금됨. 나머지는 트래픽이 적을 경우 무료 티어로 운영 가능.
+
+| 서비스 | 과금 시점 | 예상 비용 |
+|---|---|---|
+| OpenAI Realtime | 세션 진행 중 (토큰 소모) | 입력 $5/1M · 출력 $20/1M 토큰 |
+| OpenAI 평가 | 세션 종료 후 GPT 평가 실행 시 | $0.15/1M 토큰 (저렴) |
+| Railway | 컨테이너 실행 시간 | $5 크레딧/월 포함, 초과 시 ~$5–10/월 |
+| Toss / Stripe | 실제 결제 발생 시 | 거래 수수료 1.5–3% |
+| Clerk | MAU 10,000 초과 시 | $0.02/MAU |
+| Supabase | 500 MB or 50K req/월 초과 시 | Pro $25/월 |
+
+---
+
 ## Project Structure
 
 ```

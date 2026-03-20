@@ -1,11 +1,12 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
+import { useAuth, useClerk } from '@clerk/clerk-react';
 import i18n, { getCachedUiLanguage, setCachedUiLanguage, type UiLanguageCode } from '../i18n';
 
-const STORAGE_KEY = 'lingua-call-clerk-id';
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
 
 type UserContextValue = {
   clerkUserId: string;
+  getToken: () => Promise<string | null>;
   uiLanguage: UiLanguageCode;
   setUiLanguage: (lang: UiLanguageCode) => Promise<void>;
   clearIdentity: () => void;
@@ -14,16 +15,12 @@ type UserContextValue = {
 const UserContext = createContext<UserContextValue | null>(null);
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
-  const [clerkUserId] = useState<string>(() => {
-    let id = localStorage.getItem(STORAGE_KEY);
-    if (!id) {
-      id = `dev-${Math.random().toString(16).slice(2, 10)}`;
-      localStorage.setItem(STORAGE_KEY, id);
-    }
-    return id;
-  });
+  const { userId, getToken } = useAuth();
+  const { signOut } = useClerk();
 
   const [uiLanguage, setUiLanguageState] = useState<UiLanguageCode>(getCachedUiLanguage);
+
+  const clerkUserId = userId ?? '';
 
   const setUiLanguage = useCallback(async (lang: UiLanguageCode) => {
     setUiLanguageState(lang);
@@ -31,26 +28,26 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     await i18n.changeLanguage(lang);
 
     try {
+      const token = await getToken();
       await fetch(`${API_BASE}/users/me/ui-language`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'x-clerk-user-id': clerkUserId,
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ uiLanguage: lang }),
+        body: JSON.stringify({ uiLanguage: lang })
       });
     } catch {
       // silent — localStorage already updated, DB sync is best-effort
     }
-  }, [clerkUserId]);
+  }, [getToken]);
 
-  const clearIdentity = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    location.reload();
-  };
+  const clearIdentity = useCallback(() => {
+    void signOut();
+  }, [signOut]);
 
   return (
-    <UserContext.Provider value={{ clerkUserId, uiLanguage, setUiLanguage, clearIdentity }}>
+    <UserContext.Provider value={{ clerkUserId, getToken, uiLanguage, setUiLanguage, clearIdentity }}>
       {children}
     </UserContext.Provider>
   );

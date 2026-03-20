@@ -1,8 +1,11 @@
 import "./loadEnv";
+import * as Sentry from "@sentry/node";
 import express, { type Request } from "express";
 import { createServer } from "node:http";
 import cors from "cors";
 import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import { clerkMiddleware } from "@clerk/express";
 import usersRouter from "./routes/users";
 import sessionsRouter from "./routes/sessions";
 import callsRouter from "./routes/calls";
@@ -14,11 +17,66 @@ import { mediaRuntime } from "./mediaRuntime";
 import { store } from "./storage/inMemoryStore";
 import { classifyMediaStreamFailureReason } from "./callFaultClassifier";
 
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV ?? "development",
+    tracesSampleRate: 0.2
+  });
+}
+
 const app = express();
 const PORT = Number(process.env.PORT ?? 4000);
 
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+  : [];
+
 app.use(helmet());
-app.use(cors());
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      if (allowedOrigins.length === 0) {
+        if (process.env.NODE_ENV === "production") {
+          callback(new Error("CORS: ALLOWED_ORIGINS not configured"));
+          return;
+        }
+        callback(null, true);
+        return;
+      }
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("CORS: origin not allowed"));
+      }
+    },
+    credentials: true
+  })
+);
+
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: { code: "rate_limited", message: "too many requests" } }
+});
+
+const callInitiateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: { code: "rate_limited", message: "call initiation rate limit exceeded" } }
+});
+
+app.use(globalLimiter);
+app.use(clerkMiddleware());
+
 app.use(
   express.json({
     verify: (req: Request, _res, buffer) => {
@@ -41,6 +99,7 @@ app.get("/healthz", (_req, res) => {
 
 app.use("/users", usersRouter);
 app.use("/sessions", sessionsRouter);
+app.use("/calls/initiate", callInitiateLimiter);
 app.use("/calls", callsRouter);
 app.use("/workers", workersRouter);
 app.use("/reports", reportsRouter);
@@ -113,6 +172,10 @@ app.use((req, res) => {
     error: { code: "not_found", message: `No route found: ${req.method} ${req.path}` }
   });
 });
+
+if (process.env.SENTRY_DSN) {
+  app.use(Sentry.expressErrorHandler());
+}
 
 const server = createServer(app);
 if (process.env.ENABLE_WORKER_BATCH_LOOP === "true") {

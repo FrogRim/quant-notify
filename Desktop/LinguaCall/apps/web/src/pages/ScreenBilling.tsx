@@ -12,7 +12,7 @@ import LanguagePicker from '../components/ui/LanguagePicker';
 
 export default function ScreenBilling() {
   const { t } = useTranslation();
-  const { clerkUserId } = useUser();
+  const { getToken } = useUser();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -33,7 +33,7 @@ export default function ScreenBilling() {
   };
 
   const load = async () => {
-    const api = apiClient(clerkUserId);
+    const api = apiClient(getToken);
     setLoading(true);
     setError('');
     try {
@@ -68,7 +68,7 @@ export default function ScreenBilling() {
   }, [checkoutResult, searchParams, setSearchParams]);
 
   const handleCheckout = async (planCode: string) => {
-    const api = apiClient(clerkUserId);
+    const api = apiClient(getToken);
     setCheckoutLoading(planCode);
     try {
       const payload: { planCode: string; provider?: string; returnUrl: string; cancelUrl: string } =

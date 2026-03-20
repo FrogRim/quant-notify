@@ -67,6 +67,13 @@ const WORKER_SHARED_SECRET = process.env.WORKER_SHARED_SECRET;
 
 const requireWorkerToken = (req: Request, res: Response<ApiResponse<unknown>>, next: NextFunction) => {
   if (!WORKER_SHARED_SECRET) {
+    if (process.env.NODE_ENV === "production") {
+      res.status(401).json({
+        ok: false,
+        error: { code: "forbidden", message: "worker secret not configured" }
+      });
+      return;
+    }
     next();
     return;
   }

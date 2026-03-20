@@ -105,14 +105,14 @@
 # DE + opic 조합 시도 (차단 대상)
 curl -X POST http://localhost:4000/sessions \
   -H "Content-Type: application/json" \
-  -H "x-clerk-user-id: dev-test" \
+  -H "Authorization: Bearer <clerk-jwt>" \
   -d '{"language":"de","exam":"opic","level":"B1","topic":"test","durationMinutes":10,"contactMode":"immediate"}'
 # 기대: 422 { "error": { "code": "validation_error", "message": "language/exam scope violation" } }
 
 # 미지원 언어 시도
 curl -X POST http://localhost:4000/sessions \
   -H "Content-Type: application/json" \
-  -H "x-clerk-user-id: dev-test" \
+  -H "Authorization: Bearer <clerk-jwt>" \
   -d '{"language":"ja","exam":"jlpt_n2","level":"N3","topic":"test","durationMinutes":10,"contactMode":"immediate"}'
 # 기대: 422
 ```

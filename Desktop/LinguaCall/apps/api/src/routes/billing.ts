@@ -83,7 +83,7 @@ const verifyBillingWebhookSignatureWithProvider = (
 ): boolean => {
   const secret = resolveBillingWebhookSecret(providerHint)?.trim();
   if (!secret) {
-    return true;
+    return process.env.NODE_ENV !== "production";
   }
 
   const signature = extractWebhookSignature(req);
@@ -547,6 +547,99 @@ const handleCheckoutSession = async (
 
 router.post("/checkout", requireClerkUser, handleCheckoutSession);
 router.post("/checkout-sessions", requireClerkUser, handleCheckoutSession);
+
+// Toss Payments — confirm a payment and activate subscription
+router.post(
+  "/toss/confirm",
+  requireClerkUser,
+  async (req: AuthenticatedRequest, res: Response<ApiResponse<UserSubscription>>) => {
+    const { paymentKey, orderId, amount } = req.body as {
+      paymentKey?: string;
+      orderId?: string;
+      amount?: number;
+    };
+
+    if (!paymentKey || !orderId || amount == null) {
+      res.status(422).json({
+        ok: false,
+        error: { code: "validation_error", message: "paymentKey, orderId, and amount are required" }
+      });
+      return;
+    }
+
+    const tossSecretKey = process.env.TOSS_SECRET_KEY;
+    if (!tossSecretKey) {
+      res.status(500).json({
+        ok: false,
+        error: { code: "validation_error", message: "toss payments not configured" }
+      });
+      return;
+    }
+
+    const basicAuth = Buffer.from(`${tossSecretKey}:`).toString("base64");
+    let tossHttpResponse: globalThis.Response;
+    try {
+      tossHttpResponse = await fetch("https://api.tosspayments.com/v1/payments/confirm", {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${basicAuth}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ paymentKey, orderId, amount })
+      });
+    } catch {
+      res.status(502).json({
+        ok: false,
+        error: { code: "validation_error", message: "failed to reach toss payments api" }
+      });
+      return;
+    }
+
+    if (!tossHttpResponse.ok) {
+      const tossError = (await tossHttpResponse.json().catch(() => ({}))) as Record<string, unknown>;
+      res.status(402).json({
+        ok: false,
+        error: {
+          code: "validation_error",
+          message: (tossError.message as string) ?? "toss payment confirmation failed"
+        }
+      });
+      return;
+    }
+
+    const tossData = (await tossHttpResponse.json()) as Record<string, unknown>;
+    const metadata = tossData.metadata as Record<string, unknown> | undefined;
+    const planCode =
+      (metadata?.planCode as string | undefined) ??
+      (tossData.orderName as string | undefined) ??
+      "basic";
+
+    try {
+      const subscription = await store.handlePaymentWebhook({
+        eventType: "payment.confirmed",
+        provider: "toss",
+        providerSubscriptionId: orderId,
+        clerkUserId: req.clerkUserId,
+        planCode,
+        status: "active",
+        metadata: { paymentKey, orderId, amount, ...metadata }
+      });
+      res.status(200).json({ ok: true, data: subscription });
+    } catch (error) {
+      if (error instanceof AppError) {
+        const code = (error.code === "not_found" || error.code === "conflict" || error.code === "validation_error")
+          ? error.code
+          : "validation_error" as const;
+        res.status(422).json({ ok: false, error: { code, message: error.message } });
+        return;
+      }
+      res.status(500).json({
+        ok: false,
+        error: { code: "validation_error", message: "failed_to_activate_subscription" }
+      });
+    }
+  }
+);
 
 const handlePaymentWebhookRequest = async (
   req: Request,

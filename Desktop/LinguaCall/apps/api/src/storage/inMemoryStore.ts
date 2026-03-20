@@ -68,12 +68,6 @@ type NotificationPayload = {
 
 type ClerkUserId = string;
 
-interface InMemoryPhoneVerification {
-  phone: string;
-  code: string;
-  attempts: number;
-  expiresAt: number;
-}
 
 interface DbSessionRow {
   id: string;
@@ -325,7 +319,6 @@ const isLanguageExamLocked = (language: string, exam: string) =>
 
 class InMemoryStore {
   private pool: Pool;
-  private otpChallenges = new Map<ClerkUserId, InMemoryPhoneVerification>();
 
   constructor() {
     const connectionString = process.env.DATABASE_URL;
@@ -1175,12 +1168,16 @@ class InMemoryStore {
     await this.getUser(clerkUserId);
     const sanitizedPhone = sanitizeDigits(phone);
     const code = String(Math.floor(100000 + Math.random() * 900000));
-    this.otpChallenges.set(clerkUserId, {
-      phone: sanitizedPhone,
-      code,
-      attempts: 0,
-      expiresAt: Date.now() + 5 * 60 * 1000
-    });
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    await this.pool.query(
+      `DELETE FROM phone_verifications WHERE clerk_user_id = $1`,
+      [clerkUserId]
+    );
+    await this.pool.query(
+      `INSERT INTO phone_verifications (clerk_user_id, phone, code, attempts, expires_at)
+       VALUES ($1, $2, $3, 0, $4)`,
+      [clerkUserId, sanitizedPhone, code, expiresAt]
+    );
     return {
       maskedPhone: normalizePhoneMasked(sanitizedPhone),
       debugCode: code
@@ -1194,13 +1191,23 @@ class InMemoryStore {
   ): Promise<boolean> {
     await this.getUser(clerkUserId);
     const sanitizedPhone = sanitizeDigits(phone);
-    const challenge = this.otpChallenges.get(clerkUserId);
+    const result = await this.pool.query(
+      `SELECT * FROM phone_verifications WHERE clerk_user_id = $1 AND expires_at > NOW() LIMIT 1`,
+      [clerkUserId]
+    );
+    const challenge = result.rows[0] as { phone: string; code: string; attempts: number } | undefined;
 
-    if (!challenge || challenge.expiresAt < Date.now()) {
+    if (!challenge) {
       return false;
     }
-    challenge.attempts += 1;
-    if (challenge.attempts > 5 || challenge.code !== code || challenge.phone !== sanitizedPhone) {
+
+    const newAttempts = challenge.attempts + 1;
+    await this.pool.query(
+      `UPDATE phone_verifications SET attempts = $2 WHERE clerk_user_id = $1`,
+      [clerkUserId, newAttempts]
+    );
+
+    if (newAttempts > 5 || challenge.code !== code || challenge.phone !== sanitizedPhone) {
       return false;
     }
 
@@ -1211,7 +1218,10 @@ class InMemoryStore {
       "UPDATE users SET phone_encrypted = $2, phone_last4 = $3, phone_country_code = $4, phone_verified = true, phone_verified_at = NOW(), updated_at = NOW() WHERE clerk_user_id = $1",
       [clerkUserId, normalized, last4, `+${countryCode}`]
     );
-    this.otpChallenges.delete(clerkUserId);
+    await this.pool.query(
+      `DELETE FROM phone_verifications WHERE clerk_user_id = $1`,
+      [clerkUserId]
+    );
     return true;
   }
 

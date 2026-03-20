@@ -13,7 +13,7 @@ import { apiClient, describeApiError } from '../lib/api';
 
 export default function ScreenVerify() {
   const { t } = useTranslation();
-  const { clerkUserId } = useUser();
+  const { getToken } = useUser();
   const navigate = useNavigate();
   const [phone, setPhone] = useState('+8210');
   const [otp, setOtp] = useState('');
@@ -22,7 +22,7 @@ export default function ScreenVerify() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  const api = apiClient(clerkUserId);
+  const api = apiClient(getToken);
 
   const sendCode = async () => {
     setLoading(true);

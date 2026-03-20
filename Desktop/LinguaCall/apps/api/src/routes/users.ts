@@ -1,8 +1,17 @@
 import { Response, Router } from "express";
 import { z } from "zod";
 import { ApiError, ApiResponse, UserProfile } from "@lingua/shared";
+import rateLimit from "express-rate-limit";
 import { store } from "../storage/inMemoryStore";
 import { requireClerkUser, AuthenticatedRequest } from "../middleware/auth";
+
+const phoneOtpLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 2,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: { code: "rate_limited", message: "phone OTP rate limit exceeded" } }
+});
 
 const router = Router();
 
@@ -78,7 +87,7 @@ router.patch("/me/ui-language", requireClerkUser, async (req: AuthenticatedReque
 
 const PhoneStartSchema = z.object({ phone: z.string().min(8) });
 
-router.post("/phone/start", requireClerkUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<{ maskedPhone: string; debugCode: string }>>) => {
+router.post("/phone/start", phoneOtpLimiter, requireClerkUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<{ maskedPhone: string; debugCode: string }>>) => {
   const parsed = PhoneStartSchema.safeParse(req.body);
   if (!parsed.success) {
     const error: ApiError = { code: "validation_error", message: "phone is required (min 8 chars)" };

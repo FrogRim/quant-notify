@@ -13,7 +13,7 @@ export default function ScreenReport() {
   const { t } = useTranslation();
   const { reportId } = useParams<{ reportId: string }>();
   const navigate = useNavigate();
-  const { clerkUserId } = useUser();
+  const { getToken } = useUser();
 
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
@@ -21,7 +21,7 @@ export default function ScreenReport() {
 
   useEffect(() => {
     if (!reportId) return;
-    const api = apiClient(clerkUserId);
+    const api = apiClient(getToken);
     void (async () => {
       try {
         const r = await api.get<Report>(`/reports/${decodeURIComponent(reportId)}`);
@@ -32,7 +32,7 @@ export default function ScreenReport() {
         setLoading(false);
       }
     })();
-  }, [reportId, clerkUserId]);
+  }, [reportId, getToken]);
 
   return (
     <div className="min-h-screen bg-background p-4">

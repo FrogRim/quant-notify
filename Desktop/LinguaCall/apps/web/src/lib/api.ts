@@ -29,16 +29,19 @@ export function describeApiError(error: unknown, context: string): string {
   return apiError.message || 'request failed';
 }
 
-export function apiClient(clerkUserId: string) {
-  const h = (): Record<string, string> => ({
-    'content-type': 'application/json',
-    'x-clerk-user-id': clerkUserId
-  });
+export function apiClient(getToken: () => Promise<string | null>) {
+  const h = async (): Promise<Record<string, string>> => {
+    const token = await getToken();
+    return {
+      'content-type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    };
+  };
 
   async function post<T>(url: string, body: object): Promise<T> {
     const res = await fetch(`${API_BASE}${url}`, {
       method: 'POST',
-      headers: h(),
+      headers: await h(),
       body: JSON.stringify(body)
     });
     const payload = (await res.json()) as ApiResponse<T>;
@@ -51,7 +54,7 @@ export function apiClient(clerkUserId: string) {
   async function patch<T>(url: string, body: object): Promise<T> {
     const res = await fetch(`${API_BASE}${url}`, {
       method: 'PATCH',
-      headers: h(),
+      headers: await h(),
       body: JSON.stringify(body)
     });
     const payload = (await res.json()) as ApiResponse<T>;
@@ -62,7 +65,7 @@ export function apiClient(clerkUserId: string) {
   }
 
   async function get<T>(url: string): Promise<T> {
-    const res = await fetch(`${API_BASE}${url}`, { headers: h() });
+    const res = await fetch(`${API_BASE}${url}`, { headers: await h() });
     const payload = (await res.json()) as ApiResponse<T>;
     if (!payload.ok) {
       throw payload.error ?? ({ code: 'validation_error', message: 'api_error' } as ApiError);

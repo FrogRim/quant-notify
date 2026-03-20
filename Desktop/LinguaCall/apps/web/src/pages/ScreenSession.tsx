@@ -80,7 +80,7 @@ type DetailState =
 
 export default function ScreenSession() {
   const { t } = useTranslation();
-  const { clerkUserId, clearIdentity } = useUser();
+  const { getToken, clearIdentity } = useUser();
   const navigate = useNavigate();
 
   type TopicOption = { value: string; labelKey: string };
@@ -217,7 +217,7 @@ export default function ScreenSession() {
   // Detail panel
   const [detail, setDetail] = useState<DetailState>({ kind: 'idle' });
 
-  const makeApi = useCallback(() => apiClient(clerkUserId), [clerkUserId]);
+  const makeApi = useCallback(() => apiClient(getToken), [getToken]);
 
   const loadSessions = useCallback(async (showLoading = true) => {
     const api = makeApi();
@@ -309,7 +309,7 @@ export default function ScreenSession() {
       const controller = await startWebVoiceClient({
         apiBase: API_BASE,
         bootstrap: bootstrap as StartCallResponse,
-        headers: api.headers(),
+        headers: await api.headers(),
         onStateChange: (state, message) => {
           if (!activeRef.current || activeRef.current.sessionId !== sessionId) return;
           syncActive({ ...activeRef.current, state, note: message });
