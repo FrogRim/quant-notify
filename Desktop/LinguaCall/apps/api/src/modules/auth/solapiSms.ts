@@ -31,7 +31,7 @@ export const createSolapiAuthorization = ({
   salt
 }: CreateSolapiAuthorizationInput) => {
   const signature = createHmac("sha256", apiSecret).update(`${date}${salt}`).digest("hex");
-  return `HMAC-SHA256 apiKey="${apiKey}", date="${date}", salt="${salt}", signature="${signature}"`;
+  return `HMAC-SHA256 apiKey=${apiKey}, date=${date}, salt=${salt}, signature=${signature}`;
 };
 
 export const createSolapiSmsSender = ({

@@ -14,10 +14,10 @@ describe("createSolapiAuthorization", () => {
     });
 
     expect(authorization).toContain("HMAC-SHA256");
-    expect(authorization).toContain('apiKey="test-api-key"');
-    expect(authorization).toContain('date="2024-03-23T10:00:00.000Z"');
-    expect(authorization).toContain('salt="salt-value"');
-    expect(authorization).toContain('signature="');
+    expect(authorization).toContain("apiKey=test-api-key");
+    expect(authorization).toContain("date=2024-03-23T10:00:00.000Z");
+    expect(authorization).toContain("salt=salt-value");
+    expect(authorization).toContain("signature=");
   });
 });
 
