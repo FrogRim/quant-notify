@@ -24,7 +24,7 @@
 
 **외부 SaaS (키만 맞추면 됨)**
 
-- OpenAI, Toss Payments, Naver Cloud SMS 등 — 값은 모두 `infra/.env.production`에 넣습니다.
+- OpenAI, Toss Payments, SOLAPI SMS 등 — 값은 모두 `infra/.env.production`에 넣습니다.
 
 ---
 
@@ -38,7 +38,7 @@
   - `APP_DOMAIN` → VPS IP (예: `app.example.com`)
   - `API_DOMAIN` → VPS IP (예: `api.example.com`)
 - [ ] **Supabase**에서 프로젝트 생성 후 **연결 문자열**(`DATABASE_URL`) 확보
-- [ ] OpenAI / Toss / Naver SMS 등 **API 키** 준비
+- [ ] OpenAI / Toss / SOLAPI SMS 등 **API 키** 준비
 
 DNS가 아직 전파되지 않으면 Caddy가 Let’s Encrypt 인증서를 못 받을 수 있습니다. 배포 전에 `ping app.example.com` 등으로 IP가 맞는지 확인하는 것이 좋습니다.
 
@@ -126,7 +126,7 @@ openssl rand -hex 32
 ### 5.3 DB·외부 API
 
 - `DATABASE_URL` — Supabase에서 제공하는 `postgresql://...` 형식.
-- OpenAI·Toss·Naver SMS — 예시 파일의 키 이름 그대로 채웁니다. `scripts/validate-launch-env.cjs`가 비어 있지 않은지 등을 검사합니다.
+- OpenAI·Toss·SOLAPI SMS — 예시 파일의 키 이름 그대로 채웁니다. `scripts/validate-launch-env.cjs`가 비어 있지 않은지 등을 검사합니다.
 
 ---
 
@@ -275,10 +275,9 @@ OPENAI_EVAL_MODEL=gpt-4.1-mini
 TOSS_CLIENT_KEY=...
 TOSS_SECRET_KEY=...
 
-NAVER_SMS_SERVICE_ID=...
-NAVER_SMS_ACCESS_KEY=...
-NAVER_SMS_SECRET_KEY=...
-NAVER_SMS_FROM=...
+SOLAPI_API_KEY=...
+SOLAPI_API_SECRET=...
+SOLAPI_FROM=...
 
 SESSION_COOKIE_SECRET=replace-me
 WORKER_SHARED_SECRET=replace-me
@@ -295,5 +294,5 @@ WORKER_BATCH_LIMIT=20
 스택이 뜬 뒤에는 **이 문서만으로 끝나지 않습니다.** 아래를 **기준 문서**로 삼아 순서대로 진행하세요.
 
 1. [launch-e2e-checklist.md](./launch-e2e-checklist.md) — 전체 E2E·Go/No-Go
-2. 인증(OTP) 단계에서 [naver-sms-manual.md](./naver-sms-manual.md)를 함께 참고
+2. 인증(OTP) 단계에서 [solapi-sms-manual.md](./solapi-sms-manual.md)를 함께 참고
 3. 결제 단계에서 [toss-sandbox-manual.md](./toss-sandbox-manual.md)를 함께 참고

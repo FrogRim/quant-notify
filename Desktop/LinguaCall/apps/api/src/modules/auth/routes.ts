@@ -4,7 +4,7 @@ import { AUTH_ACCESS_COOKIE, clearAuthCookies, setAuthCookies } from "./cookies"
 import { StartOtpSchema, VerifyOtpSchema } from "./schema";
 import { createAuthService, type AuthRepository, type OtpSmsSender } from "./service";
 import { createPgAuthRepository } from "./repository";
-import { createNaverSmsSender } from "./naverSms";
+import { createSolapiSmsSender } from "./solapiSms";
 
 const createFallbackSmsSender = () => {
   return {
@@ -13,22 +13,20 @@ const createFallbackSmsSender = () => {
         console.log("auth.otp.sms", payload);
         return;
       }
-      throw new Error("NAVER SMS sender is not configured");
+      throw new Error("SOLAPI SMS sender is not configured");
     }
   };
 };
 
 const createDefaultSmsSender = (): OtpSmsSender => {
-  const serviceId = process.env.NAVER_SMS_SERVICE_ID?.trim();
-  const accessKey = process.env.NAVER_SMS_ACCESS_KEY?.trim();
-  const secretKey = process.env.NAVER_SMS_SECRET_KEY?.trim();
-  const from = process.env.NAVER_SMS_FROM?.trim();
+  const apiKey = process.env.SOLAPI_API_KEY?.trim();
+  const apiSecret = process.env.SOLAPI_API_SECRET?.trim();
+  const from = process.env.SOLAPI_FROM?.trim();
 
-  if (serviceId && accessKey && secretKey && from) {
-    return createNaverSmsSender({
-      serviceId,
-      accessKey,
-      secretKey,
+  if (apiKey && apiSecret && from) {
+    return createSolapiSmsSender({
+      apiKey,
+      apiSecret,
       from
     });
   }

@@ -26,7 +26,7 @@ Browser
 External providers:
 - OpenAI
 - Toss Payments
-- Naver Cloud SMS
+- SOLAPI SMS
 ```
 
 ## Tech Stack
@@ -80,7 +80,7 @@ Only these external services are part of the current launch architecture:
 - [OpenAI](https://platform.openai.com/)
 - [Supabase](https://supabase.com/) for managed PostgreSQL
 - [Toss Payments](https://developers.tosspayments.com/)
-- Naver Cloud SMS
+- SOLAPI SMS
 
 ## Key API Surface
 
@@ -144,10 +144,9 @@ OPENAI_EVAL_MODEL=gpt-4.1-mini
 TOSS_CLIENT_KEY=...
 TOSS_SECRET_KEY=...
 
-NAVER_SMS_SERVICE_ID=...
-NAVER_SMS_ACCESS_KEY=...
-NAVER_SMS_SECRET_KEY=...
-NAVER_SMS_FROM=...
+SOLAPI_API_KEY=...
+SOLAPI_API_SECRET=...
+SOLAPI_FROM=...
 
 SESSION_COOKIE_SECRET=replace-me
 WORKER_SHARED_SECRET=replace-me
@@ -160,7 +159,7 @@ WORKER_BATCH_LIMIT=20
 - deploy runbook: [`docs/runbooks/vps-deploy.md`](docs/runbooks/vps-deploy.md)
 - launch E2E checklist: [`docs/runbooks/launch-e2e-checklist.md`](docs/runbooks/launch-e2e-checklist.md)
 - Toss sandbox manual: [`docs/runbooks/toss-sandbox-manual.md`](docs/runbooks/toss-sandbox-manual.md)
-- Naver SMS manual: [`docs/runbooks/naver-sms-manual.md`](docs/runbooks/naver-sms-manual.md)
+- SOLAPI SMS manual: [`docs/runbooks/solapi-sms-manual.md`](docs/runbooks/solapi-sms-manual.md)
 - launch progress: [`docs/superpowers/reports/2026-03-23-auth-cutover-progress.md`](docs/superpowers/reports/2026-03-23-auth-cutover-progress.md)
 - launch design: [`docs/superpowers/specs/2026-03-23-saas-launch-refactor-design.md`](docs/superpowers/specs/2026-03-23-saas-launch-refactor-design.md)
 - launch plan: [`docs/superpowers/plans/2026-03-23-saas-launch-refactor-plan.md`](docs/superpowers/plans/2026-03-23-saas-launch-refactor-plan.md)

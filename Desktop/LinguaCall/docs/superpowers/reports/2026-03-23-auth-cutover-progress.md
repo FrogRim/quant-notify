@@ -14,7 +14,7 @@
   - `cookies.ts`
   - `repository.ts`
   - `routes.ts`
-  - `naverSms.ts`
+  - `solapiSms.ts`
 - Added DB migration: `packages/db/migrations/20260323_auth_sessions.sql`
 - Added `store.getPool()` in `apps/api/src/storage/inMemoryStore.ts`
 - Registered `/auth` router in `apps/api/src/index.ts`
@@ -70,7 +70,7 @@
   - `docs/runbooks/launch-e2e-checklist.md` now defines the production smoke sequence for auth, billing, realtime, worker, and report generation
 - Added operator-facing provider manuals
   - `docs/runbooks/toss-sandbox-manual.md`
-  - `docs/runbooks/naver-sms-manual.md`
+  - `docs/runbooks/solapi-sms-manual.md`
 - Added local launch utilities
   - `scripts/validate-launch-env.cjs`
   - `scripts/launch-smoke.cjs`
@@ -91,7 +91,7 @@
 - `apps/api/src/__tests__/authSession.test.ts`
 - `apps/api/src/__tests__/authRoutes.test.ts`
 - `apps/api/src/__tests__/authMiddleware.test.ts`
-- `apps/api/src/__tests__/naverSms.test.ts`
+- `apps/api/src/__tests__/solapiSms.test.ts`
 - `apps/api/src/__tests__/tossBilling.test.ts`
 - `apps/api/src/__tests__/workerApp.test.ts`
 - `apps/api/src/__tests__/completeWebVoiceCall.test.ts`
@@ -105,7 +105,7 @@
 Passed:
 
 - focused API auth suite
-  - `naverSms.test.ts`
+  - `solapiSms.test.ts`
   - `authOtp.test.ts`
   - `authSession.test.ts`
   - `authRoutes.test.ts`
@@ -154,11 +154,10 @@ Known pre-existing or out-of-scope failures still remain in:
 
 - Clerk is removed from the active runtime path, but historical naming remains in some internal variables and DB columns such as `req.clerkUserId` and `users.clerk_user_id`.
 - Web login/verify path now points at `/auth/otp/*`.
-- Naver SMS adapter is implemented, but actual production env vars still need to be set:
-  - `NAVER_SMS_SERVICE_ID`
-  - `NAVER_SMS_ACCESS_KEY`
-  - `NAVER_SMS_SECRET_KEY`
-  - `NAVER_SMS_FROM`
+- SOLAPI SMS adapter is implemented, but actual production env vars still need to be set:
+  - `SOLAPI_API_KEY`
+  - `SOLAPI_API_SECRET`
+  - `SOLAPI_FROM`
 - Billing is now logically Toss-only, but the actual Toss widget flow in web is still not integrated.
   - current web still redirects to `checkout.checkoutUrl`
   - `@tosspayments/tosspayments-sdk` is installed but not yet wired into `ScreenBilling.tsx`

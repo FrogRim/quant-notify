@@ -13,7 +13,7 @@ launch-e2e-checklist.md  ← 지금 문서 (기준)
   ↓         ↓
 §2 인증   §3 결제
   ↓         ↓
-naver-    toss-
+solapi-   toss-
 sms-      sandbox-
 manual    manual
 ```
@@ -22,7 +22,7 @@ manual    manual
 |------|-------------------|----------------|
 | 인프라 | (이미 완료했다고 가정) | [vps-deploy.md](./vps-deploy.md) |
 | §0~1 | 사전 조건·헬스체크 | — |
-| §2 | 전화번호 OTP·세션 | [naver-sms-manual.md](./naver-sms-manual.md) |
+| §2 | 전화번호 OTP·세션 | [solapi-sms-manual.md](./solapi-sms-manual.md) |
 | §3 | Toss 샌드박스 결제 | [toss-sandbox-manual.md](./toss-sandbox-manual.md) |
 | §4~6 | 세션·음성·리포트 | — |
 
@@ -72,7 +72,7 @@ export WORKER_SHARED_SECRET="infra/.env.production 안의 값과 동일"
 - `infra/.env.production`에 다음이 채워져 있음:
   - `DATABASE_URL`, `OPENAI_*`
   - `TOSS_CLIENT_KEY`, `TOSS_SECRET_KEY`, `VITE_TOSS_CLIENT_KEY` (샌드박스 검증 시 **테스트 키**)
-  - `NAVER_SMS_*`
+  - `SOLAPI_*`
   - `SESSION_COOKIE_SECRET`, `WORKER_SHARED_SECRET`
 
 ### 0.2 DB 마이그레이션
@@ -139,7 +139,7 @@ docker compose --env-file infra/.env.production -f infra/docker-compose.yml logs
 
 ## 2. 인증 E2E
 
-상세 분기·SQL·증적은 [naver-sms-manual.md](./naver-sms-manual.md)와 병행합니다.
+상세 분기·SQL·증적은 [solapi-sms-manual.md](./solapi-sms-manual.md)와 병행합니다.
 
 ### 목표
 
@@ -172,7 +172,7 @@ docker compose --env-file infra/.env.production -f infra/docker-compose.yml logs
 
 ### 실패 시 (요약)
 
-- 문자 없음 → Naver 콘솔·`NAVER_SMS_*`·발신번호 → [naver-sms-manual.md](./naver-sms-manual.md).
+- 문자 없음 → SOLAPI 콘솔·`SOLAPI_*`·발신번호 → [solapi-sms-manual.md](./solapi-sms-manual.md).
 - verify 실패 → `phone_verifications`·API 로그.
 - 새로고침 시 로그아웃 → `ALLOWED_ORIGINS`, HTTPS, API/앱 도메인 조합.
 
