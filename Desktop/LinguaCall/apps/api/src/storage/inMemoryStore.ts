@@ -328,6 +328,10 @@ class InMemoryStore {
     this.pool = new Pool({ connectionString });
   }
 
+  getPool(): Pool {
+    return this.pool;
+  }
+
   private toUserProfile(row: DbUserRow): UserProfile {
     return {
       id: row.id,
@@ -1436,37 +1440,6 @@ class InMemoryStore {
     return this.mapSubscription(result.rows[0], user.id);
   }
 
-  private resolveCheckoutProvider(explicitProvider?: string): string {
-    const normalized = (explicitProvider ?? "").trim().toLowerCase();
-    if (normalized) {
-      return normalized;
-    }
-    const envProvider = (process.env.PAYMENT_PROVIDER ?? "").trim().toLowerCase();
-    return envProvider || "mock";
-  }
-
-  private buildMockCheckoutSessionUrl(
-    checkoutSessionId: string,
-    clerkUserId: string,
-    planCode: string,
-    payload: CreateCheckoutSessionPayload
-  ): string {
-    const baseUrl =
-      process.env.PAYMENT_CHECKOUT_BASE_URL?.trim() ||
-      defaultTwilioBaseUrl() ||
-      "https://example.com";
-    const returnUrl = this.resolveCheckoutCallbackUrl("return", "mock", payload.returnUrl);
-    const cancelUrl = this.resolveCheckoutCallbackUrl("cancel", "mock", payload.cancelUrl);
-    const params = new URLSearchParams({
-      session: checkoutSessionId,
-      user: clerkUserId,
-      plan: planCode,
-      returnUrl,
-      cancelUrl
-    });
-    return `${baseUrl.replace(/\/$/, "")}/billing/mock-checkout?${params.toString()}`;
-  }
-
   private resolveCheckoutEndpoint(provider: string): string | undefined {
     const normalizedProvider = provider.trim().toLowerCase();
     const explicit = process.env[`PAYMENT_PROVIDER_CREATE_URL_${normalizedProvider.toUpperCase()}`]?.trim();
@@ -1513,41 +1486,6 @@ class InMemoryStore {
       successRedirectUrl: returnUrl,
       cancelRedirectUrl: cancelUrl
     };
-
-    if (provider === "stripe") {
-      return {
-        ...commonPayload,
-        mode: "subscription",
-        payment_method_types: ["card"],
-        client_reference_id: clerkUserId,
-        success_redirect_url: returnUrl,
-        cancel_redirect_url: cancelUrl,
-        metadata: {
-          provider,
-          checkoutSessionId,
-          clerkUserId,
-          planCode,
-          priceId: planCode
-        },
-        line_items: [
-          {
-            price: planCode,
-            quantity: 1
-          }
-        ],
-        success_url: returnUrl,
-        cancel_url: cancelUrl,
-        subscription_data: {
-          metadata: {
-            provider,
-            checkoutSessionId,
-            clerkUserId,
-            planCode,
-            priceId: planCode
-          }
-        }
-      };
-    }
 
     return commonPayload;
   }
@@ -1820,39 +1758,36 @@ class InMemoryStore {
     if (!requestedPlanCode) {
       throw new AppError("validation_error", "planCode is required");
     }
-    await this.resolvePlan(requestedPlanCode);
-
-    const provider = this.resolveCheckoutProvider(payload.provider);
-    const checkoutSessionId = `cs_${randomUUID().replace(/-/g, "").slice(0, 26)}`;
-    if (provider === "mock") {
-      return {
-        provider,
-        checkoutSessionId,
-        checkoutUrl: this.buildMockCheckoutSessionUrl(
-          checkoutSessionId,
-          clerkUserId,
-          requestedPlanCode,
-          payload
-        ),
-        planCode: requestedPlanCode
-      };
+    const requestedProvider = (payload.provider ?? "").trim().toLowerCase();
+    if (requestedProvider && requestedProvider !== "toss") {
+      throw new AppError("validation_error", "only toss is supported");
     }
+    const plan = await this.resolvePlan(requestedPlanCode);
+    if (plan.price_krw <= 0) {
+      throw new AppError("validation_error", "paid checkout is not available for the free plan");
+    }
+    const provider = "toss";
+    const checkoutSessionId = `order_${randomUUID().replace(/-/g, "").slice(0, 26)}`;
+    const successUrl = this.resolveCheckoutCallbackUrl("return", provider, payload.returnUrl);
+    const failUrl = this.resolveCheckoutCallbackUrl("cancel", provider, payload.cancelUrl);
 
-    const liveSession = await this.createLiveCheckoutSession(
-      provider,
-      clerkUserId,
-      requestedPlanCode,
-      checkoutSessionId,
-      payload
-    );
     return {
-      ...liveSession,
-      planCode: requestedPlanCode
+      provider,
+      checkoutSessionId,
+      planCode: requestedPlanCode,
+      orderId: checkoutSessionId,
+      orderName: plan.display_name,
+      amount: plan.price_krw,
+      successUrl,
+      failUrl,
+      customerKey: user.id,
+      customerEmail: user.email ?? undefined,
+      customerName: user.name ?? undefined
     };
   }
 
   async handlePaymentWebhook(payload: BillingWebhookPayload): Promise<UserSubscription> {
-    const provider = (payload.provider || "mock").trim();
+    const provider = (payload.provider || "toss").trim();
     const eventType = payload.eventType?.trim();
     const clerkUserId = (payload.clerkUserId ?? "").trim();
     const planCode = (payload.planCode ?? "").trim();
@@ -2321,6 +2256,69 @@ class InMemoryStore {
     }
 
     return this.getSessionReport(clerkUserId, sessionId);
+  }
+
+  async processPendingSessionReports(limit = 20): Promise<{
+    processed: number;
+    readySessionIds: string[];
+    failedSessionIds: string[];
+  }> {
+    const pendingSessions = await this.pool.query<{ id: string }>(
+      `
+        SELECT id
+        FROM sessions
+        WHERE status = 'completed'
+          AND report_status = 'pending'
+        ORDER BY completed_at ASC NULLS LAST, updated_at ASC
+        LIMIT $1
+      `,
+      [limit]
+    );
+
+    const readySessionIds: string[] = [];
+    const failedSessionIds: string[] = [];
+
+    for (const pending of pendingSessions.rows) {
+      const client = await this.pool.connect();
+      try {
+        await client.query("BEGIN");
+        const locked = await client.query<{ id: string; status: string; report_status: string }>(
+          "SELECT id, status, report_status FROM sessions WHERE id = $1 FOR UPDATE",
+          [pending.id]
+        );
+        if (
+          locked.rows.length === 0 ||
+          locked.rows[0].status !== "completed" ||
+          locked.rows[0].report_status !== "pending"
+        ) {
+          await client.query("ROLLBACK");
+          continue;
+        }
+
+        await this.ensureSessionReportReady(client, pending.id);
+        await client.query(
+          "UPDATE sessions SET report_status = 'ready', updated_at = NOW() WHERE id = $1",
+          [pending.id]
+        );
+        await client.query("COMMIT");
+        readySessionIds.push(pending.id);
+      } catch (error) {
+        await client.query("ROLLBACK");
+        await this.markReportFailure(
+          pending.id,
+          error instanceof Error ? error.message : "failed_to_generate_report"
+        ).catch(() => undefined);
+        failedSessionIds.push(pending.id);
+      } finally {
+        client.release();
+      }
+    }
+
+    return {
+      processed: readySessionIds.length + failedSessionIds.length,
+      readySessionIds,
+      failedSessionIds
+    };
   }
 
   private async ensureSessionReportReady(client: PoolClient, sessionId: string): Promise<void> {
@@ -3015,25 +3013,6 @@ class InMemoryStore {
           [row.id, JSON.stringify(accuracyPolicy), JSON.stringify(accuracyState)]
         );
         updatedRow = completed.rows[0];
-        try {
-          await this.ensureSessionReportReady(client, row.id);
-          const reportUpdated = await client.query<DbSessionRow>(
-            "UPDATE sessions SET report_status = 'ready' WHERE id = $1 RETURNING *",
-            [row.id]
-          );
-          updatedRow = reportUpdated.rows[0];
-        } catch (error) {
-          await this.markReportFailureInTransaction(
-            client,
-            row.id,
-            error instanceof Error ? error.message : "web_voice_report_generation_failed"
-          );
-          const failedReport = await client.query<DbSessionRow>(
-            "UPDATE sessions SET report_status = 'failed' WHERE id = $1 RETURNING *",
-            [row.id]
-          );
-          updatedRow = failedReport.rows[0];
-        }
       }
 
       await this.writeWebhookEvent(
@@ -4295,16 +4274,7 @@ class InMemoryStore {
         }
       }
       if (shouldAutoGenerateReport) {
-        try {
-          await this.ensureSessionReportReady(client, session.id);
-          await client.query("UPDATE sessions SET report_status = 'ready' WHERE id = $1", [session.id]);
-        } catch (error) {
-          await this.markReportFailureInTransaction(
-            client,
-            session.id,
-            error instanceof Error ? error.message : "report_generation_failed"
-          );
-        }
+        await client.query("UPDATE sessions SET report_status = 'pending' WHERE id = $1", [session.id]);
       }
 
       const setClauses = [

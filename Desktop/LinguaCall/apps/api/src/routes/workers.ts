@@ -1,6 +1,13 @@
 import { NextFunction, Request, Response, Router } from "express";
 import { ApiResponse, FailureReason } from "@lingua/shared";
 import { store } from "../storage/inMemoryStore";
+import { runWorkerBatchOnce } from "../modules/jobs/workerApp";
+import {
+  dispatchScheduledSessions,
+  markMissedScheduledSessions,
+  sendScheduledReminders
+} from "../modules/jobs/schedulerJobs";
+import { sendReportReadyNotifications } from "../modules/jobs/reportJobs";
 
 type WorkerSessionDispatchResult = {
   dispatched: string[];
@@ -48,8 +55,6 @@ type WorkerBatchRunResult = {
   ranAt: string;
 };
 
-const nowIso = () => new Date().toISOString();
-
 type ScheduledTerminalSource = "media_stream" | "app_hangup" | "provider_internal" | "system";
 
 type ScheduledTerminalPayload = {
@@ -91,53 +96,41 @@ const requireWorkerToken = (req: Request, res: Response<ApiResponse<unknown>>, n
 router.post("/scheduled-dispatch", requireWorkerToken, async (_req, res) => {
   try {
     const limit = Math.min(Math.max(Number(_req.query.limit ?? 1), 1), 20) || 1;
-    const sessions = await store.dispatchDueScheduledSessions(limit);
-    const data: WorkerSessionDispatchResult = {
-      count: sessions.length,
-      dispatched: sessions.map((session) => session.id)
-    };
+    const data: WorkerSessionDispatchResult = await dispatchScheduledSessions(limit);
     res.status(200).json({ ok: true, data });
   } catch (error) {
     res.status(500).json({ ok: false, error: { code: "validation_error", message: "failed_to_dispatch_due_sessions" } });
   }
 });
 
-const sendScheduledReminders = async (_req: Request, res: Response<ApiResponse<WorkerReminderResult>>) => {
+const sendScheduledRemindersHandler = async (_req: Request, res: Response<ApiResponse<WorkerReminderResult>>) => {
   try {
     const limit = Math.min(Math.max(Number(_req.query.limit ?? 20), 1), 100) || 20;
-    const result = await store.sendDueReminders(limit);
-    const data: WorkerReminderResult = {
-      sent: result.sent,
-      sessionIds: result.sessionIds
-    };
+    const data: WorkerReminderResult = await sendScheduledReminders(limit);
     res.status(200).json({ ok: true, data });
   } catch (error) {
     res.status(500).json({ ok: false, error: { code: "validation_error", message: "failed_to_send_due_reminders" } });
   }
 };
 
-router.post("/scheduled-reminders", requireWorkerToken, sendScheduledReminders);
-router.post("/dispatch-reminder", requireWorkerToken, sendScheduledReminders);
+router.post("/scheduled-reminders", requireWorkerToken, sendScheduledRemindersHandler);
+router.post("/dispatch-reminder", requireWorkerToken, sendScheduledRemindersHandler);
 
-const sendReportNotifications = async (
+const sendReportNotificationsHandler = async (
   _req: Request,
   res: Response<ApiResponse<WorkerReportNotifyResult>>
 ) => {
   try {
     const limit = Math.min(Math.max(Number(_req.query.limit ?? 20), 1), 200) || 20;
-    const result = await store.sendReportReadyNotifications(limit);
-    const data: WorkerReportNotifyResult = {
-      notified: result.notified,
-      reportIds: result.reportIds
-    };
+    const data: WorkerReportNotifyResult = await sendReportReadyNotifications(limit);
     res.status(200).json({ ok: true, data });
   } catch (error) {
     res.status(500).json({ ok: false, error: { code: "validation_error", message: "failed_to_send_report_notifications" } });
   }
 };
 
-router.post("/report-notify", requireWorkerToken, sendReportNotifications);
-router.post("/notify/report-ready", requireWorkerToken, sendReportNotifications);
+router.post("/report-notify", requireWorkerToken, sendReportNotificationsHandler);
+router.post("/notify/report-ready", requireWorkerToken, sendReportNotificationsHandler);
 
 const runWorkerBatch = async (
   _req: Request,
@@ -149,26 +142,7 @@ const runWorkerBatch = async (
     const limit = Number.isFinite(parsedLimit)
       ? Math.min(Math.max(Math.max(Math.floor(parsedLimit), 1), 200), 200)
       : defaultLimit;
-    const dispatched = await store.dispatchDueScheduledSessions(limit);
-    const reminders = await store.sendDueReminders(limit);
-    const missed = await store.markMissedScheduledSessions(limit);
-    const reportNotifications = await store.sendReportReadyNotifications(limit);
-    const data: WorkerBatchRunResult = {
-      dispatched: {
-        count: dispatched.length,
-        dispatched: dispatched.map((session) => session.id)
-      },
-      reminders: {
-        sent: reminders.sent,
-        sessionIds: reminders.sessionIds
-      },
-      missed: {
-        marked: missed.marked,
-        sessionIds: missed.sessionIds
-      },
-      reportNotifications,
-      ranAt: nowIso()
-    };
+    const data: WorkerBatchRunResult = await runWorkerBatchOnce(limit);
     res.status(200).json({ ok: true, data });
   } catch (error) {
     res.status(500).json({ ok: false, error: { code: "validation_error", message: "failed_to_run_worker_batch" } });
@@ -204,11 +178,7 @@ const markMissedScheduledSessionsHandler = async (
 ) => {
   try {
     const limit = Math.min(Math.max(Number(_req.query.limit ?? 20), 1), 200) || 20;
-    const result = await store.markMissedScheduledSessions(limit);
-    const data: WorkerMissedResult = {
-      marked: result.marked,
-      sessionIds: result.sessionIds
-    };
+    const data: WorkerMissedResult = await markMissedScheduledSessions(limit);
     res.status(200).json({ ok: true, data });
   } catch (error) {
     res.status(500).json({ ok: false, error: { code: "validation_error", message: "failed_to_mark_missed_scheduled_sessions" } });

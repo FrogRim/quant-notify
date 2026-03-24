@@ -9,7 +9,8 @@ import {
   UpdateScheduledSessionPayload
 } from "@lingua/shared";
 import { store, AppError } from "../storage/inMemoryStore";
-import { requireClerkUser, AuthenticatedRequest } from "../middleware/auth";
+import { requireAuthenticatedUser, AuthenticatedRequest } from "../middleware/auth";
+import { learningSessionsRepository } from "../modules/learning-sessions/repository";
 
 const router = Router();
 
@@ -31,7 +32,7 @@ const CreateSessionSchema = z.object({
   { message: "scheduledForAtUtc is required for scheduled_once", path: ["scheduledForAtUtc"] }
 );
 
-router.post("/", requireClerkUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Session>>) => {
+router.post("/", requireAuthenticatedUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Session>>) => {
   const parsed = CreateSessionSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(422).json({ ok: false, error: { code: "validation_error", message: parsed.error.errors[0]?.message ?? "invalid_request" } });
@@ -40,7 +41,7 @@ router.post("/", requireClerkUser, async (req: AuthenticatedRequest, res: Respon
   const payload = parsed.data;
 
   try {
-    const session = await store.createSession(req.clerkUserId, {
+    const session = await learningSessionsRepository.create(req.clerkUserId, {
       language: payload.language,
       exam: payload.exam,
       level: payload.level,
@@ -84,10 +85,10 @@ router.post("/", requireClerkUser, async (req: AuthenticatedRequest, res: Respon
   }
 });
 
-router.get("/", requireClerkUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Session[]>>) => {
+router.get("/", requireAuthenticatedUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Session[]>>) => {
   const status = req.query.status as string | undefined;
   const contactMode = req.query.contactMode as string | undefined;
-  const sessions = await store.listSessions(req.clerkUserId);
+  const sessions = await learningSessionsRepository.list(req.clerkUserId);
   const filtered = sessions.filter((session) => {
     if (status && session.status !== status) {
       return false;
@@ -100,7 +101,7 @@ router.get("/", requireClerkUser, async (req: AuthenticatedRequest, res: Respons
   res.json({ ok: true, data: filtered });
 });
 
-router.get("/:id/messages", requireClerkUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<SessionMessagesResponse>>) => {
+router.get("/:id/messages", requireAuthenticatedUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<SessionMessagesResponse>>) => {
   const { id } = req.params;
   if (!id) {
     res.status(422).json({ ok: false, error: { code: "validation_error", message: "session id required" } });
@@ -118,7 +119,7 @@ router.get("/:id/messages", requireClerkUser, async (req: AuthenticatedRequest, 
   }
 
   try {
-    const messages = await store.getSessionMessages(req.clerkUserId, id, limit);
+    const messages = await learningSessionsRepository.getMessages(req.clerkUserId, id, limit);
     res.json({ ok: true, data: messages });
   } catch (err) {
     if (err instanceof AppError && err.code === "SESSION_NOT_FOUND") {
@@ -129,7 +130,7 @@ router.get("/:id/messages", requireClerkUser, async (req: AuthenticatedRequest, 
   }
 });
 
-router.post("/:id/report", requireClerkUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Report>>) => {
+router.post("/:id/report", requireAuthenticatedUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Report>>) => {
   const { id } = req.params;
   if (!id) {
     res.status(422).json({ ok: false, error: { code: "validation_error", message: "session id required" } });
@@ -137,7 +138,7 @@ router.post("/:id/report", requireClerkUser, async (req: AuthenticatedRequest, r
   }
 
   try {
-    const report = await store.generateSessionReport(req.clerkUserId, id);
+    const report = await learningSessionsRepository.generateReport(req.clerkUserId, id);
     res.status(201).json({ ok: true, data: report });
   } catch (err) {
     if (err instanceof AppError && err.code === "REPORT_NOT_FOUND") {
@@ -160,7 +161,7 @@ router.post("/:id/report", requireClerkUser, async (req: AuthenticatedRequest, r
   }
 });
 
-router.get("/:id/report", requireClerkUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Report>>) => {
+router.get("/:id/report", requireAuthenticatedUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Report>>) => {
   const { id } = req.params;
   if (!id) {
     res.status(422).json({ ok: false, error: { code: "validation_error", message: "session id required" } });
@@ -168,7 +169,7 @@ router.get("/:id/report", requireClerkUser, async (req: AuthenticatedRequest, re
   }
 
   try {
-    const report = await store.getSessionReport(req.clerkUserId, id);
+    const report = await learningSessionsRepository.getReport(req.clerkUserId, id);
     res.json({ ok: true, data: report });
   } catch (err) {
     if (err instanceof AppError && err.code === "REPORT_NOT_FOUND") {
@@ -183,14 +184,14 @@ router.get("/:id/report", requireClerkUser, async (req: AuthenticatedRequest, re
   }
 });
 
-router.get("/:id", requireClerkUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Session>>) => {
+router.get("/:id", requireAuthenticatedUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Session>>) => {
   const { id } = req.params;
   if (!id) {
     res.status(422).json({ ok: false, error: { code: "validation_error", message: "session id required" } });
     return;
   }
   try {
-    const session = await store.getSession(req.clerkUserId, id);
+    const session = await learningSessionsRepository.get(req.clerkUserId, id);
     res.json({ ok: true, data: session });
   } catch (err) {
     if (err instanceof AppError && err.code === "SESSION_NOT_FOUND") {
@@ -201,7 +202,7 @@ router.get("/:id", requireClerkUser, async (req: AuthenticatedRequest, res: Resp
   }
 });
 
-router.patch("/:id", requireClerkUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Session>>) => {
+router.patch("/:id", requireAuthenticatedUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Session>>) => {
   const { id } = req.params;
   const payload = req.body as Partial<UpdateScheduledSessionPayload>;
   if (!id) {
@@ -217,7 +218,7 @@ router.patch("/:id", requireClerkUser, async (req: AuthenticatedRequest, res: Re
   }
 
   try {
-    const session = await store.updateScheduledSession(req.clerkUserId, id, payload);
+    const session = await learningSessionsRepository.updateScheduled(req.clerkUserId, id, payload);
     res.json({ ok: true, data: session });
   } catch (err) {
     if (err instanceof AppError && err.code === "SESSION_NOT_FOUND") {
@@ -244,14 +245,14 @@ router.patch("/:id", requireClerkUser, async (req: AuthenticatedRequest, res: Re
   }
 });
 
-router.post("/:id/cancel", requireClerkUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Session>>) => {
+router.post("/:id/cancel", requireAuthenticatedUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Session>>) => {
   const { id } = req.params;
   if (!id) {
     res.status(422).json({ ok: false, error: { code: "validation_error", message: "session id required" } });
     return;
   }
   try {
-    const session = await store.cancelScheduledSession(req.clerkUserId, id);
+    const session = await learningSessionsRepository.cancelScheduled(req.clerkUserId, id);
     res.json({ ok: true, data: session });
   } catch (err) {
     if (err instanceof AppError && err.code === "SESSION_NOT_FOUND") {

@@ -1,7 +1,8 @@
 import { Response, Router } from "express";
 import { ApiResponse, ApiError, Report } from "@lingua/shared";
-import { store, AppError } from "../storage/inMemoryStore";
-import { requireClerkUser, AuthenticatedRequest } from "../middleware/auth";
+import { AppError } from "../storage/inMemoryStore";
+import { requireAuthenticatedUser, AuthenticatedRequest } from "../middleware/auth";
+import { reportsRepository } from "../modules/reports/repository";
 
 const router = Router();
 
@@ -9,7 +10,7 @@ const withError = (res: Response<ApiResponse<unknown>>, message = "request_faile
   res.status(400).json({ ok: false, error: { code, message } });
 };
 
-router.get("/:id", requireClerkUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Report>>) => {
+router.get("/:id", requireAuthenticatedUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Report>>) => {
   const { id } = req.params;
   if (!id) {
     res.status(422).json({ ok: false, error: { code: "validation_error", message: "report id required" } });
@@ -17,7 +18,7 @@ router.get("/:id", requireClerkUser, async (req: AuthenticatedRequest, res: Resp
   }
 
   try {
-    const report = await store.getReportByPublicId(req.clerkUserId, id);
+    const report = await reportsRepository.getByPublicId(req.clerkUserId, id);
     res.json({ ok: true, data: report });
   } catch (err) {
     if (err instanceof AppError && err.code === "REPORT_NOT_FOUND") {

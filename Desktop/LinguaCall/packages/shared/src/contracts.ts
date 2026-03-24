@@ -290,8 +290,16 @@ export interface CreateCheckoutSessionPayload {
 export interface BillingCheckoutSession {
   provider: string;
   checkoutSessionId: string;
-  checkoutUrl: string;
+  checkoutUrl?: string;
   planCode: string;
+  orderId?: string;
+  orderName?: string;
+  amount?: number;
+  successUrl?: string;
+  failUrl?: string;
+  customerKey?: string;
+  customerEmail?: string;
+  customerName?: string;
 }
 
 export interface BillingWebhookPayload {

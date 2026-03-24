@@ -10,7 +10,8 @@ import {
   WebVoiceRuntimeEventPayload
 } from "@lingua/shared";
 import { store, AppError } from "../storage/inMemoryStore";
-import { requireClerkUser, AuthenticatedRequest } from "../middleware/auth";
+import { requireAuthenticatedUser, AuthenticatedRequest } from "../middleware/auth";
+import { learningSessionsRepository } from "../modules/learning-sessions/repository";
 import {
   completeWebVoiceSession,
   joinWebVoiceSession,
@@ -185,7 +186,7 @@ const handleTwilioTwiml = async (req: Request, res: Response<string>) => {
   }
 
   try {
-    const session = await store.getSessionByTwilioLookup(lookup);
+    const session = await learningSessionsRepository.getByTwilioLookup(lookup);
     if (!session) {
       res.status(404).type("text/plain").send("session_not_found");
       return;
@@ -208,7 +209,7 @@ const InitiateCallSchema = z.object({
   idempotencyKey: z.string().optional()
 });
 
-router.post("/initiate", requireClerkUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<StartCallResponse>>) => {
+router.post("/initiate", requireAuthenticatedUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<StartCallResponse>>) => {
   const parsed = InitiateCallSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(422).json({ ok: false, error: { code: "validation_error", message: "sessionId is required" } });
@@ -251,7 +252,7 @@ router.post("/initiate", requireClerkUser, async (req: AuthenticatedRequest, res
   }
 });
 
-router.post("/:id/join", requireClerkUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<JoinCallResponse>>) => {
+router.post("/:id/join", requireAuthenticatedUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<JoinCallResponse>>) => {
   const { id } = req.params;
   if (!id) {
     res.status(422).json({ ok: false, error: { code: "validation_error", message: "session id is required" } });
@@ -282,7 +283,7 @@ router.post("/:id/join", requireClerkUser, async (req: AuthenticatedRequest, res
   }
 });
 
-router.post("/:id/runtime-event", requireClerkUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Session>>) => {
+router.post("/:id/runtime-event", requireAuthenticatedUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Session>>) => {
   const { id } = req.params;
   const payload = req.body as Partial<WebVoiceRuntimeEventPayload>;
   if (!id || !payload.event) {
@@ -306,7 +307,7 @@ router.post("/:id/runtime-event", requireClerkUser, async (req: AuthenticatedReq
   }
 });
 
-router.post("/:id/runtime-complete", requireClerkUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Session>>) => {
+router.post("/:id/runtime-complete", requireAuthenticatedUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Session>>) => {
   const { id } = req.params;
   const payload = req.body as Partial<CompleteWebVoiceCallPayload>;
   if (!id || !payload.endReason) {
@@ -346,7 +347,7 @@ router.post("/twilio-status-callback", verifyTwilioSignature, async (req: Reques
   }
 
   try {
-    const session = await store.handleTwilioStatusCallback({
+    const session = await learningSessionsRepository.handleTwilioStatusCallback({
       callSid,
       status,
       sequenceNumber: sequenceNumber as string | number | null | undefined,
@@ -369,14 +370,14 @@ router.post("/twilio-status-callback", verifyTwilioSignature, async (req: Reques
   }
 });
 
-router.get("/:id", requireClerkUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Session>>) => {
+router.get("/:id", requireAuthenticatedUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Session>>) => {
   const { id } = req.params;
   if (!id) {
     res.status(422).json({ ok: false, error: { code: "validation_error", message: "call id is required" } });
     return;
   }
   try {
-    const session = await store.getSessionByIdentifierForUser(req.clerkUserId, id);
+    const session = await learningSessionsRepository.getByIdentifierForUser(req.clerkUserId, id);
     res.json({ ok: true, data: session });
   } catch (err) {
     if (err instanceof AppError && err.code === "SESSION_NOT_FOUND") {
@@ -387,7 +388,7 @@ router.get("/:id", requireClerkUser, async (req: AuthenticatedRequest, res: Resp
   }
 });
 
-router.post("/:id/end", requireClerkUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Session>>) => {
+router.post("/:id/end", requireAuthenticatedUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Session>>) => {
   const { id } = req.params;
   if (!id) {
     res.status(422).json({ ok: false, error: { code: "validation_error", message: "call id is required" } });

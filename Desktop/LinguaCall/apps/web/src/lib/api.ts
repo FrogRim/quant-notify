@@ -1,6 +1,6 @@
 import type { ApiError, ApiResponse } from '@lingua/shared';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
+const API_BASE = (import.meta as ImportMeta & { env?: Record<string, string> }).env?.VITE_API_BASE_URL ?? 'http://localhost:4000';
 
 export function normalizeApiError(error: unknown): ApiError {
   if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
@@ -41,6 +41,7 @@ export function apiClient(getToken: () => Promise<string | null>) {
   async function post<T>(url: string, body: object): Promise<T> {
     const res = await fetch(`${API_BASE}${url}`, {
       method: 'POST',
+      credentials: 'include',
       headers: await h(),
       body: JSON.stringify(body)
     });
@@ -54,6 +55,7 @@ export function apiClient(getToken: () => Promise<string | null>) {
   async function patch<T>(url: string, body: object): Promise<T> {
     const res = await fetch(`${API_BASE}${url}`, {
       method: 'PATCH',
+      credentials: 'include',
       headers: await h(),
       body: JSON.stringify(body)
     });
@@ -65,7 +67,10 @@ export function apiClient(getToken: () => Promise<string | null>) {
   }
 
   async function get<T>(url: string): Promise<T> {
-    const res = await fetch(`${API_BASE}${url}`, { headers: await h() });
+    const res = await fetch(`${API_BASE}${url}`, {
+      credentials: 'include',
+      headers: await h()
+    });
     const payload = (await res.json()) as ApiResponse<T>;
     if (!payload.ok) {
       throw payload.error ?? ({ code: 'validation_error', message: 'api_error' } as ApiError);

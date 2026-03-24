@@ -6,11 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "preview:host": "vite preview --host 0.0.0.0 --port 4173",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "echo web lint pass"
   },
   "dependencies": {
-    "@clerk/clerk-react": "^5.0.0",
     "@lingua/shared": "workspace:*",
     "@radix-ui/react-select": "^2.2.6",
     "class-variance-authority": "^0.7.0",
@@ -21,7 +21,6 @@
     "react-dom": "^18.3.1",
     "react-i18next": "^16.5.8",
     "react-router-dom": "^6.27.0",
-    "@sentry/react": "^8.0.0",
     "@tosspayments/tosspayments-sdk": "^2.0.0",
     "tailwind-merge": "^2.5.4"
   },

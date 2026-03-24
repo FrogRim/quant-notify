@@ -1,29 +1,20 @@
 import "./loadEnv";
-import * as Sentry from "@sentry/node";
 import express, { type Request } from "express";
 import { createServer } from "node:http";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import { clerkMiddleware } from "@clerk/express";
 import usersRouter from "./routes/users";
 import sessionsRouter from "./routes/sessions";
 import callsRouter from "./routes/calls";
 import workersRouter from "./routes/workers";
 import reportsRouter from "./routes/reports";
 import billingRouter from "./routes/billing";
+import { createAuthRouter } from "./modules/auth/routes";
 import { attachMediaStreamServer } from "./mediaStream";
 import { mediaRuntime } from "./mediaRuntime";
 import { store } from "./storage/inMemoryStore";
 import { classifyMediaStreamFailureReason } from "./callFaultClassifier";
-
-if (process.env.SENTRY_DSN) {
-  Sentry.init({
-    dsn: process.env.SENTRY_DSN,
-    environment: process.env.NODE_ENV ?? "development",
-    tracesSampleRate: 0.2
-  });
-}
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 4000);
@@ -75,7 +66,6 @@ const callInitiateLimiter = rateLimit({
 });
 
 app.use(globalLimiter);
-app.use(clerkMiddleware());
 
 app.use(
   express.json({
@@ -97,6 +87,7 @@ app.get("/healthz", (_req, res) => {
   return;
 });
 
+app.use("/auth", createAuthRouter());
 app.use("/users", usersRouter);
 app.use("/sessions", sessionsRouter);
 app.use("/calls/initiate", callInitiateLimiter);
@@ -105,67 +96,6 @@ app.use("/workers", workersRouter);
 app.use("/reports", reportsRouter);
 app.use("/billing", billingRouter);
 
-const parseWorkerBatchInterval = () => {
-  const raw = process.env.WORKER_BATCH_INTERVAL_MS;
-  if (!raw) {
-    return 30000;
-  }
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isNaN(parsed) || parsed < 1000 ? 30000 : parsed;
-};
-
-const parseWorkerBatchLimit = () => {
-  const raw = process.env.WORKER_BATCH_LIMIT;
-  if (!raw) {
-    return 20;
-  }
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isNaN(parsed) || parsed <= 0 ? 20 : parsed;
-};
-
-const workerBatchLimit = parseWorkerBatchLimit();
-const runWorkerBatchLoop = async () => {
-  try {
-    const dispatched = await store.dispatchDueScheduledSessions(workerBatchLimit);
-    const reminders = await store.sendDueReminders(workerBatchLimit);
-    const missed = await store.markMissedScheduledSessions(workerBatchLimit);
-    const reportNotifications = await store.sendReportReadyNotifications(workerBatchLimit);
-    if (
-      dispatched.length > 0 ||
-      reminders.sent > 0 ||
-      missed.marked > 0 ||
-      reportNotifications.notified > 0
-    ) {
-      console.log(
-        `worker-batch: dispatched=${dispatched.length}, reminders=${reminders.sent}, missed=${missed.marked}, reportNotifications=${reportNotifications.notified}`
-      );
-    }
-  } catch (error) {
-    console.error("worker-batch failed", error);
-  }
-};
-
-let workerBatchInFlight = false;
-const scheduleWorkerBatch = () => {
-  const interval = parseWorkerBatchInterval();
-  const run = async () => {
-    if (workerBatchInFlight) {
-      return;
-    }
-    workerBatchInFlight = true;
-    try {
-      await runWorkerBatchLoop();
-    } finally {
-      workerBatchInFlight = false;
-    }
-  };
-
-  void run();
-  setInterval(() => {
-    void run();
-  }, interval);
-};
-
 app.use((req, res) => {
   res.status(404).json({
     ok: false,
@@ -173,14 +103,7 @@ app.use((req, res) => {
   });
 });
 
-if (process.env.SENTRY_DSN) {
-  app.use(Sentry.expressErrorHandler());
-}
-
 const server = createServer(app);
-if (process.env.ENABLE_WORKER_BATCH_LOOP === "true") {
-  scheduleWorkerBatch();
-}
 const enableTwilioMediaStream =
   process.env.ENABLE_TWILIO_MEDIA_STREAM === "true" ||
   process.env.CALL_PROVIDER === "twilio";

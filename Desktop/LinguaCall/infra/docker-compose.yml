@@ -1,0 +1,123 @@
+services:
+  caddy:
+    image: caddy:2.9-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    security_opt:
+      - no-new-privileges:true
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+        VITE_TOSS_CLIENT_KEY: ${VITE_TOSS_CLIENT_KEY}
+    restart: unless-stopped
+    init: true
+    expose:
+      - "8080"
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    init: true
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_REALTIME_MODEL: ${OPENAI_REALTIME_MODEL}
+      OPENAI_REALTIME_VOICE: ${OPENAI_REALTIME_VOICE}
+      OPENAI_REALTIME_TRANSCRIPTION_MODEL: ${OPENAI_REALTIME_TRANSCRIPTION_MODEL}
+      OPENAI_EVAL_MODEL: ${OPENAI_EVAL_MODEL}
+      TOSS_CLIENT_KEY: ${TOSS_CLIENT_KEY}
+      TOSS_SECRET_KEY: ${TOSS_SECRET_KEY}
+      NAVER_SMS_SERVICE_ID: ${NAVER_SMS_SERVICE_ID}
+      NAVER_SMS_ACCESS_KEY: ${NAVER_SMS_ACCESS_KEY}
+      NAVER_SMS_SECRET_KEY: ${NAVER_SMS_SECRET_KEY}
+      NAVER_SMS_FROM: ${NAVER_SMS_FROM}
+      SESSION_COOKIE_SECRET: ${SESSION_COOKIE_SECRET}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      APP_BASE_URL: ${APP_BASE_URL}
+      API_BASE_URL: ${API_BASE_URL}
+      WORKER_SHARED_SECRET: ${WORKER_SHARED_SECRET}
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  worker:
+    build:
+      context: ..
+      dockerfile: apps/worker/Dockerfile
+    restart: unless-stopped
+    init: true
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_REALTIME_MODEL: ${OPENAI_REALTIME_MODEL}
+      OPENAI_REALTIME_VOICE: ${OPENAI_REALTIME_VOICE}
+      OPENAI_REALTIME_TRANSCRIPTION_MODEL: ${OPENAI_REALTIME_TRANSCRIPTION_MODEL}
+      OPENAI_EVAL_MODEL: ${OPENAI_EVAL_MODEL}
+      WORKER_BATCH_INTERVAL_MS: ${WORKER_BATCH_INTERVAL_MS:-30000}
+      WORKER_BATCH_LIMIT: ${WORKER_BATCH_LIMIT:-20}
+      WORKER_SHARED_SECRET: ${WORKER_SHARED_SECRET}
+      API_BASE_URL: ${API_BASE_URL}
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+
+volumes:
+  caddy_data:
+  caddy_config:

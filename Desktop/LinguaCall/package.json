@@ -8,7 +8,12 @@
     "dev": "pnpm -r --parallel dev",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "launch:env:check": "node scripts/validate-launch-env.cjs infra/.env.production",
+    "launch:smoke": "node scripts/launch-smoke.cjs",
+    "compose:build": "docker compose --env-file infra/.env.production -f infra/docker-compose.yml build",
+    "compose:up": "docker compose --env-file infra/.env.production -f infra/docker-compose.yml up -d",
+    "compose:config": "docker compose --env-file infra/.env.production -f infra/docker-compose.yml config"
   },
   "devDependencies": {
     "@types/node": "^22.5.0",

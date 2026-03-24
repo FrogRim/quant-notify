@@ -1,26 +1,43 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
-import { useAuth, useClerk } from '@clerk/clerk-react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import i18n, { getCachedUiLanguage, setCachedUiLanguage, type UiLanguageCode } from '../i18n';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
 
 type UserContextValue = {
-  clerkUserId: string;
   getToken: () => Promise<string | null>;
+  isAuthenticated: boolean;
+  sessionChecked: boolean;
+  refreshSession: () => Promise<void>;
   uiLanguage: UiLanguageCode;
   setUiLanguage: (lang: UiLanguageCode) => Promise<void>;
-  clearIdentity: () => void;
+  clearIdentity: () => Promise<void>;
 };
 
 const UserContext = createContext<UserContextValue | null>(null);
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
-  const { userId, getToken } = useAuth();
-  const { signOut } = useClerk();
-
   const [uiLanguage, setUiLanguageState] = useState<UiLanguageCode>(getCachedUiLanguage);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const getToken = useCallback(async () => null, []);
 
-  const clerkUserId = userId ?? '';
+  const refreshSession = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/me`, {
+        credentials: 'include'
+      });
+      const payload = await res.json().catch(() => null) as { ok?: boolean } | null;
+      setIsAuthenticated(Boolean(payload?.ok && res.ok));
+    } catch {
+      setIsAuthenticated(false);
+    } finally {
+      setSessionChecked(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshSession();
+  }, [refreshSession]);
 
   const setUiLanguage = useCallback(async (lang: UiLanguageCode) => {
     setUiLanguageState(lang);
@@ -42,12 +59,22 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }
   }, [getToken]);
 
-  const clearIdentity = useCallback(() => {
-    void signOut();
-  }, [signOut]);
+  const clearIdentity = useCallback(async () => {
+    try {
+      await fetch(`${API_BASE}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+    } catch {
+      // best-effort logout
+    }
+    setIsAuthenticated(false);
+    setSessionChecked(true);
+    window.location.hash = '#/';
+  }, []);
 
   return (
-    <UserContext.Provider value={{ clerkUserId, getToken, uiLanguage, setUiLanguage, clearIdentity }}>
+    <UserContext.Provider value={{ getToken, isAuthenticated, sessionChecked, refreshSession, uiLanguage, setUiLanguage, clearIdentity }}>
       {children}
     </UserContext.Provider>
   );

@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, Link } from 'react-router-dom';
-import { UserProvider } from './context/UserContext';
+import { UserProvider, useUser } from './context/UserContext';
 import ScreenLogin from './pages/ScreenLogin';
 import ScreenVerify from './pages/ScreenVerify';
 import ScreenSession from './pages/ScreenSession';
@@ -17,15 +17,29 @@ function Footer() {
   );
 }
 
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, sessionChecked } = useUser();
+  if (!sessionChecked) return null;
+  if (!isAuthenticated) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
+function VerifyGate() {
+  const { isAuthenticated, sessionChecked } = useUser();
+  if (!sessionChecked) return null;
+  if (isAuthenticated) return <Navigate to="/session" replace />;
+  return <ScreenVerify />;
+}
+
 export default function App() {
   return (
     <UserProvider>
       <Routes>
         <Route path="/" element={<ScreenLogin />} />
-        <Route path="/verify" element={<ScreenVerify />} />
-        <Route path="/session" element={<ScreenSession />} />
-        <Route path="/billing" element={<ScreenBilling />} />
-        <Route path="/report/:reportId" element={<ScreenReport />} />
+        <Route path="/verify" element={<VerifyGate />} />
+        <Route path="/session" element={<AuthGate><ScreenSession /></AuthGate>} />
+        <Route path="/billing" element={<AuthGate><ScreenBilling /></AuthGate>} />
+        <Route path="/report/:reportId" element={<AuthGate><ScreenReport /></AuthGate>} />
         <Route path="/privacy" element={<ScreenPrivacy />} />
         <Route path="/terms" element={<ScreenTerms />} />
         <Route path="*" element={<Navigate to="/" replace />} />

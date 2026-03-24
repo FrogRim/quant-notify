@@ -2,7 +2,7 @@
   "name": "@lingua/shared",
   "private": true,
   "version": "0.1.0",
-  "main": "src/index.ts",
+  "main": "src/index.js",
   "types": "src/index.ts",
   "scripts": {
     "build": "echo shared package has no build output",

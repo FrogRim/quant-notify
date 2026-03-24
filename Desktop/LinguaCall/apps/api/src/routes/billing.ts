@@ -1,4 +1,4 @@
-import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { Request, Response, Router } from "express";
 import {
   ApiResponse,
@@ -8,8 +8,10 @@ import {
   CreateCheckoutSessionPayload,
   UserSubscription
 } from "@lingua/shared";
-import { AppError, store } from "../storage/inMemoryStore";
-import { requireClerkUser, AuthenticatedRequest } from "../middleware/auth";
+import { AppError } from "../storage/inMemoryStore";
+import { requireAuthenticatedUser, AuthenticatedRequest } from "../middleware/auth";
+import { billingRepository } from "../modules/billing/repository";
+import { assertTossOnlyProvider, normalizeTossProvider, TOSS_PROVIDER } from "../modules/billing/tossService";
 
 const router = Router();
 
@@ -316,12 +318,12 @@ const parseWebhookPayload = (body: WebhookBody): BillingWebhookPayload => {
       body.provider_subscription_id,
       body.subscriptionId,
       body.subscription_id,
-      body.data?.subscription,
-      body?.object?.subscription,
+      asObject(body.data)?.subscription,
+      asObject(body.object)?.subscription,
       data?.subscriptionId,
       data?.subscription_id,
       data?.subscription,
-      data?.object?.subscription,
+      asObject(data?.object)?.subscription,
       asObject(dataObjectSubscription)?.id,
       dataObject?.subscription_id,
       asObject(body.object)?.subscription,
@@ -372,50 +374,9 @@ const parseWebhookPayload = (body: WebhookBody): BillingWebhookPayload => {
   };
 };
 
-const readMockCheckoutQuery = (value: unknown): string | undefined => {
-  if (typeof value === "string") {
-    const normalized = value.trim();
-    return normalized.length > 0 ? normalized : undefined;
-  }
-  if (Array.isArray(value)) {
-    return readMockCheckoutQuery(value[0]);
-  }
-  return undefined;
-};
-
-const renderMockCheckoutPage = (params: {
-  checkoutSession: string;
-  clerkUserId: string;
-  planCode: string;
-  returnUrl?: string;
-  cancelUrl?: string;
-}) => {
-  const returnUrl = encodeURIComponent(params.returnUrl ?? "");
-  const cancelUrl = encodeURIComponent(params.cancelUrl ?? "");
-  const successUrl = `/billing/mock-checkout/result?result=success&session=${encodeURIComponent(
-    params.checkoutSession
-  )}&user=${encodeURIComponent(params.clerkUserId)}&plan=${encodeURIComponent(params.planCode)}&returnUrl=${returnUrl}`;
-  const cancelPath = `/billing/mock-checkout/result?result=cancel&session=${encodeURIComponent(
-    params.checkoutSession
-  )}&user=${encodeURIComponent(params.clerkUserId)}&plan=${encodeURIComponent(params.planCode)}&cancelUrl=${cancelUrl}`;
-
-  return `<!doctype html><html><body style="font-family:Arial,sans-serif;padding:24px;">
-    <h1>LinguaCall Mock Checkout</h1>
-    <p>Session: ${params.checkoutSession}</p>
-    <p>User: ${params.clerkUserId}</p>
-    <p>Plan: ${params.planCode}</p>
-    <div style="display:flex;gap:12px;">
-      <a href="${successUrl}">Approve mock payment</a>
-      <a href="${cancelPath}">Cancel mock payment</a>
-    </div>
-    ${params.returnUrl ? `<p>On success return to: ${decodeURIComponent(returnUrl)}</p>` : ""}
-    ${params.cancelUrl ? `<p>On cancel return to: ${decodeURIComponent(cancelUrl)}</p>` : ""}
-  </body></html>`;
-};
-
 router.get("/plans", async (_req, res: Response<ApiResponse<BillingPlan[]>>) => {
   try {
-    const plans: BillingPlan[] = await store.listBillingPlans();
+    const plans: BillingPlan[] = await billingRepository.listPlans();
     res.status(200).json({ ok: true, data: plans });
   } catch (error) {
     res.status(500).json({
@@ -427,10 +388,10 @@ router.get("/plans", async (_req, res: Response<ApiResponse<BillingPlan[]>>) => 
 
 router.get(
   "/subscription",
-  requireClerkUser,
+  requireAuthenticatedUser,
   async (req: AuthenticatedRequest, res: Response<ApiResponse<UserSubscription | null>>) => {
     try {
-      const subscription = await store.getUserActiveSubscription(req.clerkUserId);
+      const subscription = await billingRepository.getSubscription(req.clerkUserId);
       res.status(200).json({ ok: true, data: subscription });
     } catch (error) {
       res.status(500).json({
@@ -440,77 +401,6 @@ router.get(
     }
   }
 );
-
-const isMockBillingEnabled = process.env.NODE_ENV !== "production";
-
-router.get("/mock-checkout", async (req: Request, res: Response) => {
-  if (!isMockBillingEnabled) {
-    res.status(404).end();
-    return;
-  }
-  const checkoutSession = readMockCheckoutQuery(req.query.session);
-  const clerkUserId = readMockCheckoutQuery(req.query.user);
-  const planCode = readMockCheckoutQuery(req.query.plan);
-  const returnUrl = readMockCheckoutQuery(req.query.returnUrl);
-  const cancelUrl = readMockCheckoutQuery(req.query.cancelUrl);
-  if (!checkoutSession || !clerkUserId || !planCode) {
-    res.status(422).send("missing session, user, or plan");
-    return;
-  }
-  res.type("html").send(renderMockCheckoutPage({
-    checkoutSession,
-    clerkUserId,
-    planCode,
-    returnUrl,
-    cancelUrl
-  }));
-});
-
-router.get("/mock-checkout/result", async (req: Request, res: Response<ApiResponse<UserSubscription | null>>) => {
-  if (!isMockBillingEnabled) {
-    res.status(404).json({ ok: false, error: { code: "not_found", message: "not_found" } });
-    return;
-  }
-  const rawResult = readMockCheckoutQuery(req.query.result);
-  const checkoutSession = readMockCheckoutQuery(req.query.session);
-  const clerkUserId = readMockCheckoutQuery(req.query.user);
-  const planCode = readMockCheckoutQuery(req.query.plan);
-  const returnUrl = readMockCheckoutQuery(req.query.returnUrl);
-  const cancelUrl = readMockCheckoutQuery(req.query.cancelUrl);
-
-  if (!rawResult || !checkoutSession || !clerkUserId || !planCode) {
-    res.status(422).json({ ok: false, error: { code: "validation_error", message: "invalid mock checkout result request" } });
-    return;
-  }
-  const normalizedResult = rawResult === "success" ? "success" : "cancel";
-  const eventType = normalizedResult === "success" ? "subscription.created" : "subscription.deleted";
-  const status = normalizedResult === "success" ? "active" : "canceled";
-  const providerSubscriptionId = `sub_${randomUUID().replace(/-/g, "").slice(0, 26)}`;
-
-  try {
-    const payload = parseWebhookPayload({
-      type: eventType,
-      provider: "mock",
-      eventId: checkoutSession,
-      clerkUserId,
-      planCode,
-      providerSubscriptionId,
-      status
-    });
-    await store.handlePaymentWebhook(payload);
-  } catch {
-    res.status(400).json({ ok: false, error: { code: "validation_error", message: "mock checkout webhook failed" } });
-    return;
-  }
-
-  const redirectTo = normalizedResult === "success" ? returnUrl : cancelUrl;
-  if (redirectTo) {
-    res.redirect(redirectTo);
-    return;
-  }
-  const data = await store.getUserActiveSubscription(clerkUserId);
-  res.status(200).json({ ok: true, data });
-});
 
 const handleCheckoutSession = async (
   req: AuthenticatedRequest,
@@ -523,11 +413,12 @@ const handleCheckoutSession = async (
   }
 
   try {
-    const checkout = await store.createCheckoutSession(req.clerkUserId, {
+    assertTossOnlyProvider(typeof payload.provider === "string" ? payload.provider : undefined);
+    const checkout = await billingRepository.createCheckoutSession(req.clerkUserId, {
       planCode: payload.planCode,
       returnUrl: typeof payload.returnUrl === "string" ? payload.returnUrl : undefined,
       cancelUrl: typeof payload.cancelUrl === "string" ? payload.cancelUrl : undefined,
-      provider: typeof payload.provider === "string" ? payload.provider : undefined
+      provider: normalizeTossProvider()
     });
     res.status(200).json({ ok: true, data: checkout });
   } catch (error) {
@@ -545,13 +436,13 @@ const handleCheckoutSession = async (
   }
 };
 
-router.post("/checkout", requireClerkUser, handleCheckoutSession);
-router.post("/checkout-sessions", requireClerkUser, handleCheckoutSession);
+router.post("/checkout", requireAuthenticatedUser, handleCheckoutSession);
+router.post("/checkout-sessions", requireAuthenticatedUser, handleCheckoutSession);
 
 // Toss Payments — confirm a payment and activate subscription
 router.post(
   "/toss/confirm",
-  requireClerkUser,
+  requireAuthenticatedUser,
   async (req: AuthenticatedRequest, res: Response<ApiResponse<UserSubscription>>) => {
     const { paymentKey, orderId, amount } = req.body as {
       paymentKey?: string;
@@ -615,9 +506,9 @@ router.post(
       "basic";
 
     try {
-      const subscription = await store.handlePaymentWebhook({
+      const subscription = await billingRepository.handleWebhook({
         eventType: "payment.confirmed",
-        provider: "toss",
+        provider: TOSS_PROVIDER,
         providerSubscriptionId: orderId,
         clerkUserId: req.clerkUserId,
         planCode,
@@ -662,7 +553,7 @@ const handlePaymentWebhookRequest = async (
   }
 
   let payload = parseWebhookPayload(req.body as WebhookBody);
-  if (normalizedProviderHint && (!payload.provider || payload.provider === "mock")) {
+  if (normalizedProviderHint && !payload.provider) {
     payload = { ...payload, provider: normalizedProviderHint };
   }
   if (!payload.eventType || payload.eventType === "payment_event") {
@@ -688,7 +579,7 @@ const handlePaymentWebhookRequest = async (
   }
 
   try {
-    const normalized = await store.handlePaymentWebhook({
+    const normalized = await billingRepository.handleWebhook({
       ...payload
     });
     res.status(200).json({ ok: true, data: normalized });
@@ -707,12 +598,12 @@ const handlePaymentWebhookRequest = async (
 };
 
 router.post("/webhooks/:provider", async (req: Request, res: Response<ApiResponse<UserSubscription>>) => {
-  const provider = req.params?.provider;
+  const provider = typeof req.params?.provider === "string" ? req.params.provider : undefined;
+  if ((provider ?? "").trim().toLowerCase() !== TOSS_PROVIDER) {
+    res.status(404).json({ ok: false, error: { code: "not_found", message: "not_found" } });
+    return;
+  }
   await handlePaymentWebhookRequest(req, res, provider);
-});
-
-router.post("/webhooks/payments", async (req: Request, res: Response<ApiResponse<UserSubscription>>) => {
-  await handlePaymentWebhookRequest(req, res);
 });
 
 export default router;

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import type { UserProfile } from '@lingua/shared';
 import PageLayout from '../components/layout/PageLayout';
 import { CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -29,7 +28,7 @@ export default function ScreenVerify() {
     setError('');
     try {
       const result = await api.post<{ maskedPhone: string; debugCode: string }>(
-        '/users/phone/start',
+        '/auth/otp/start',
         { phone }
       );
       setMessage(`Sent to ${result.maskedPhone} (dev code: ${result.debugCode})`);
@@ -45,7 +44,7 @@ export default function ScreenVerify() {
     setLoading(true);
     setError('');
     try {
-      await api.post<UserProfile>('/users/phone/confirm', { phone, code: otp });
+      await api.post<{ userId: string; sessionId: string }>('/auth/otp/verify', { phone, code: otp });
       navigate('/session');
     } catch (err) {
       setError(describeApiError(err, 'phone_confirm'));
