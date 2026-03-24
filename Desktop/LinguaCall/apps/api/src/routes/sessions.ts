@@ -19,8 +19,8 @@ const withError = (res: Response<ApiResponse<unknown>>, message = "request_faile
 };
 
 const CreateSessionSchema = z.object({
-  language: z.enum(["en", "de", "zh", "es"]),
-  exam: z.enum(["opic", "goethe_b2", "hsk5", "dele_b1"]),
+  language: z.enum(["en", "de", "zh", "es", "ja", "fr"]),
+  exam: z.enum(["opic", "goethe_b2", "hsk5", "dele_b1", "jlpt_n2", "delf_b1"]),
   level: z.string().min(1),
   topic: z.string().min(1),
   durationMinutes: z.number().int().min(1),
