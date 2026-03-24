@@ -23,15 +23,9 @@ importers:
 
   apps/api:
     dependencies:
-      '@clerk/express':
-        specifier: ^1.0.0
-        version: 1.7.77(express@4.22.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@lingua/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      '@sentry/node':
-        specifier: ^8.0.0
-        version: 8.55.0
       cors:
         specifier: ^2.8.5
         version: 2.8.6
@@ -90,18 +84,12 @@ importers:
 
   apps/web:
     dependencies:
-      '@clerk/clerk-react':
-        specifier: ^5.0.0
-        version: 5.61.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@lingua/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@radix-ui/react-select':
         specifier: ^2.2.6
         version: 2.2.6(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@sentry/react':
-        specifier: ^8.0.0
-        version: 8.55.0(react@18.3.1)
       '@tosspayments/tosspayments-sdk':
         specifier: ^2.0.0
         version: 2.6.0
