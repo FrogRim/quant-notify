@@ -234,8 +234,8 @@ export const createOpenAIRealtimeSession = async (
     throw new Error("OPENAI_API_KEY is required");
   }
 
-  const model = readEnv(process.env.OPENAI_REALTIME_MODEL) ?? "gpt-realtime";
-  const voice = readEnv(process.env.OPENAI_REALTIME_VOICE) ?? "alloy";
+  const model = readEnv(process.env.OPENAI_REALTIME_MODEL) ?? "gpt-realtime-mini";
+  const voice = readEnv(process.env.OPENAI_REALTIME_VOICE) ?? "marin";
   const transcriptionModel = readEnv(process.env.OPENAI_REALTIME_TRANSCRIPTION_MODEL) ?? "gpt-4o-mini-transcribe";
   const sessionUrl = readEnv(process.env.OPENAI_REALTIME_SESSION_URL) ?? "https://api.openai.com/v1/realtime/sessions";
 
