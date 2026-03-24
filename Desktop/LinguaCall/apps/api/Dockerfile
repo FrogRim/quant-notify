@@ -3,6 +3,8 @@ RUN npm install -g pnpm
 WORKDIR /app
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json ./
 COPY packages/ packages/
+COPY apps/web/package.json apps/web/package.json
+COPY apps/worker/package.json apps/worker/package.json
 COPY apps/api/ apps/api/
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter lingua-call-api build
@@ -14,6 +16,8 @@ RUN addgroup -S app && adduser -S app -G app
 
 COPY --from=builder /app/pnpm-workspace.yaml /app/pnpm-lock.yaml /app/package.json /app/tsconfig.base.json ./
 COPY --from=builder /app/packages /app/packages
+COPY --from=builder /app/apps/web/package.json /app/apps/web/package.json
+COPY --from=builder /app/apps/worker/package.json /app/apps/worker/package.json
 COPY --from=builder /app/apps/api/package.json /app/apps/api/package.json
 COPY --from=builder /app/apps/api/dist /app/apps/api/dist
 

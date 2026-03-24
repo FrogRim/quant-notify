@@ -4,7 +4,9 @@ WORKDIR /app
 
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json ./
 COPY packages/ packages/
+COPY apps/web/package.json apps/web/package.json
 COPY apps/api/ apps/api/
+COPY apps/worker/package.json apps/worker/package.json
 
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter lingua-call-api build
