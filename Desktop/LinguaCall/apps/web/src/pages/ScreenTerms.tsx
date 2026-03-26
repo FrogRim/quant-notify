@@ -1,65 +1,78 @@
-import { useNavigate } from 'react-router-dom';
-import { Button } from '../components/ui/button';
+import { useTranslation } from 'react-i18next';
+import { StaticDocumentPage } from '../components/layout/StaticDocumentPage';
 
 export default function ScreenTerms() {
-  const navigate = useNavigate();
+  const { i18n } = useTranslation();
+  const isKo = i18n.language.startsWith('ko');
+
   return (
-    <div className="min-h-screen bg-background p-6 max-w-2xl mx-auto">
-      <Button variant="ghost" className="mb-4" onClick={() => navigate(-1)}>
-        ← 뒤로
-      </Button>
-      <h1 className="text-2xl font-bold mb-6">이용약관</h1>
-      <div className="prose prose-sm text-foreground space-y-4">
+    <StaticDocumentPage
+      eyebrow={isKo ? '서비스 이용 안내' : 'Service terms'}
+      title={isKo ? '이용약관' : 'Terms of Service'}
+      updatedAt="2026-03-20"
+      locale={i18n.language}
+    >
+      <section className="space-y-3">
         <p>
-          본 약관은 LinguaCall(이하 "서비스")이 제공하는 AI 기반 언어 학습 통화 서비스의 이용에
-          관한 조건을 규정합니다.
+          {isKo
+            ? '이 약관은 LinguaCall 서비스 이용과 관련한 기본 조건을 설명합니다. 사용자는 계정 생성 및 서비스 이용을 시작함으로써 본 약관에 동의한 것으로 봅니다.'
+            : 'These terms explain the baseline rules for using LinguaCall. By creating an account and using the service, you agree to these terms.'}
         </p>
+      </section>
 
-        <h2 className="text-lg font-semibold mt-6">제1조 (목적)</h2>
+      <section className="space-y-3">
+        <h2>{isKo ? '1. 서비스 성격' : '1. Nature of the service'}</h2>
         <p>
-          본 약관은 서비스 이용 조건 및 절차, 이용자와 서비스 간의 권리·의무 관계를 규정하는 것을
-          목적으로 합니다.
+          {isKo
+            ? 'LinguaCall은 AI 기반 실시간 회화 연습 및 리포트 제공 서비스입니다. 시험 대비 또는 일상 회화 연습을 보조하기 위한 도구이며, 자격을 보장하거나 공식 교육기관을 대체하지 않습니다.'
+            : 'LinguaCall is an AI-powered realtime speaking practice and reporting service. It supports language practice and exam preparation, but it does not guarantee outcomes or replace formal instruction.'}
         </p>
+      </section>
 
-        <h2 className="text-lg font-semibold mt-6">제2조 (서비스 이용)</h2>
-        <ul className="list-disc pl-5 space-y-1">
-          <li>만 14세 이상이면 서비스를 이용할 수 있습니다.</li>
-          <li>회원가입 시 정확한 정보를 제공해야 합니다.</li>
-          <li>계정 및 비밀번호 관리 책임은 이용자에게 있습니다.</li>
+      <section className="space-y-3">
+        <h2>{isKo ? '2. 계정 및 인증' : '2. Accounts and verification'}</h2>
+        <ul>
+          <li>{isKo ? '서비스는 전화번호 OTP 인증을 사용합니다.' : 'The service uses phone OTP verification.'}</li>
+          <li>{isKo ? '사용자는 본인이 접근 가능한 번호만 등록해야 합니다.' : 'You must use a phone number you control.'}</li>
+          <li>{isKo ? '세션 보안을 위해 서비스는 일정 조건에서 재인증을 요청할 수 있습니다.' : 'The service may require re-verification in certain security scenarios.'}</li>
         </ul>
+      </section>
 
-        <h2 className="text-lg font-semibold mt-6">제3조 (결제 및 환불)</h2>
-        <ul className="list-disc pl-5 space-y-1">
-          <li>구독 요금은 결제일 기준으로 청구됩니다.</li>
-          <li>결제 후 7일 이내, 서비스 미이용 시 전액 환불됩니다.</li>
-          <li>서비스 이용 후에는 부분 환불이 적용될 수 있습니다.</li>
+      <section className="space-y-3">
+        <h2>{isKo ? '3. 결제 및 구독' : '3. Billing and subscriptions'}</h2>
+        <ul>
+          <li>{isKo ? '유료 플랜은 Toss Payments를 통해 처리됩니다.' : 'Paid plans are processed through Toss Payments.'}</li>
+          <li>{isKo ? '플랜별 제공 분수와 최대 세션 시간은 안내된 정책을 따릅니다.' : 'Included minutes and max session length follow the published plan rules.'}</li>
+          <li>{isKo ? '결제 후 실제 이용 가능 상태 반영에는 짧은 지연이 있을 수 있습니다.' : 'There may be a short delay between payment confirmation and entitlement updates.'}</li>
         </ul>
+      </section>
 
-        <h2 className="text-lg font-semibold mt-6">제4조 (금지 행위)</h2>
-        <ul className="list-disc pl-5 space-y-1">
-          <li>서비스의 무단 복제, 배포, 상업적 이용 금지</li>
-          <li>타인의 계정 도용 또는 부정 이용 금지</li>
-          <li>서비스 운영을 방해하는 행위 금지</li>
+      <section className="space-y-3">
+        <h2>{isKo ? '4. 사용 제한' : '4. Acceptable use'}</h2>
+        <ul>
+          <li>{isKo ? '서비스를 불법적이거나 유해한 목적으로 사용하면 안 됩니다.' : 'Do not use the service for illegal or harmful purposes.'}</li>
+          <li>{isKo ? '자동화된 대량 요청이나 시스템 악용 시도가 감지되면 접근이 제한될 수 있습니다.' : 'Access may be restricted if automated abuse or misuse is detected.'}</li>
+          <li>{isKo ? '서비스 안정성을 해치는 방식의 사용은 제한 대상입니다.' : 'Usage that threatens service stability may be blocked.'}</li>
         </ul>
+      </section>
 
-        <h2 className="text-lg font-semibold mt-6">제5조 (서비스 변경 및 중단)</h2>
+      <section className="space-y-3">
+        <h2>{isKo ? '5. 면책 및 책임 제한' : '5. Disclaimer and limitation of liability'}</h2>
         <p>
-          서비스는 기술적 사유, 운영 정책 변경 등으로 인해 내용이 변경되거나 중단될 수 있으며,
-          사전에 공지합니다.
+          {isKo
+            ? '서비스는 가능한 범위에서 안정적으로 제공되지만, 네트워크 상태나 외부 서비스 장애로 인해 일부 기능이 일시적으로 제한될 수 있습니다. 회사는 고의 또는 중대한 과실이 없는 한 간접 손해에 대해 책임을 지지 않습니다.'
+            : 'The service is provided on a best-effort basis. Some features may be temporarily limited due to network conditions or third-party outages. To the extent permitted by law, indirect damages are excluded unless caused by willful misconduct or gross negligence.'}
         </p>
+      </section>
 
-        <h2 className="text-lg font-semibold mt-6">제6조 (책임 제한)</h2>
+      <section className="space-y-3">
+        <h2>{isKo ? '6. 문의' : '6. Contact'}</h2>
         <p>
-          서비스는 천재지변, 통신 장애 등 불가항력으로 인한 서비스 중단에 대해 책임을 지지 않습니다.
+          {isKo
+            ? '계정, 결제, 약관 관련 문의는 support@linguacall.shop 으로 접수합니다.'
+            : 'Questions about accounts, billing, or these terms can be sent to support@linguacall.shop.'}
         </p>
-
-        <h2 className="text-lg font-semibold mt-6">제7조 (분쟁 해결)</h2>
-        <p>
-          본 약관에 관한 분쟁은 대한민국 법률에 따르며, 관할 법원은 서울중앙지방법원으로 합니다.
-        </p>
-
-        <p className="text-xs text-muted-foreground mt-8">시행일: 2026년 3월 20일</p>
-      </div>
-    </div>
+      </section>
+    </StaticDocumentPage>
   );
 }

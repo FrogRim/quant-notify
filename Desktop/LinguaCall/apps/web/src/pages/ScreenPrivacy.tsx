@@ -1,57 +1,71 @@
-import { useNavigate } from 'react-router-dom';
-import { Button } from '../components/ui/button';
+import { useTranslation } from 'react-i18next';
+import { StaticDocumentPage } from '../components/layout/StaticDocumentPage';
 
 export default function ScreenPrivacy() {
-  const navigate = useNavigate();
+  const { i18n } = useTranslation();
+  const isKo = i18n.language.startsWith('ko');
+
   return (
-    <div className="min-h-screen bg-background p-6 max-w-2xl mx-auto">
-      <Button variant="ghost" className="mb-4" onClick={() => navigate(-1)}>
-        ← 뒤로
-      </Button>
-      <h1 className="text-2xl font-bold mb-6">개인정보처리방침</h1>
-      <div className="prose prose-sm text-foreground space-y-4">
+    <StaticDocumentPage
+      eyebrow={isKo ? '개인정보 처리 안내' : 'Privacy notice'}
+      title={isKo ? '개인정보처리방침' : 'Privacy Policy'}
+      updatedAt="2026-03-20"
+      locale={i18n.language}
+    >
+      <section className="space-y-3">
         <p>
-          LinguaCall(이하 "서비스")은 이용자의 개인정보를 중요하게 여기며, 「개인정보 보호법」(PIPA) 및
-          EU 일반 데이터 보호 규정(GDPR)을 준수합니다.
+          {isKo
+            ? 'LinguaCall은 사용자의 개인정보를 서비스 제공에 필요한 범위에서만 처리합니다. 본 문서는 현재 MVP 기준으로 어떤 정보를 수집하고, 어떤 목적으로 사용하며, 언제 삭제하는지 설명합니다.'
+            : 'LinguaCall processes personal data only to the extent required to operate the service. This policy explains what we collect, why we collect it, and when it is removed under the current MVP launch setup.'}
         </p>
+      </section>
 
-        <h2 className="text-lg font-semibold mt-6">1. 수집하는 개인정보 항목</h2>
-        <ul className="list-disc pl-5 space-y-1">
-          <li>이름, 이메일 주소</li>
-          <li>전화번호(국내 번호, 인증 목적)</li>
-          <li>결제 정보(카드 정보는 결제 대행사가 보관하며 서비스는 보관하지 않습니다)</li>
-          <li>서비스 이용 기록, 통화 내용(학습 평가 목적)</li>
+      <section className="space-y-3">
+        <h2>{isKo ? '1. 수집하는 정보' : '1. Data we collect'}</h2>
+        <ul>
+          <li>{isKo ? '전화번호 및 인증 상태' : 'Phone number and verification status'}</li>
+          <li>{isKo ? '세션 생성 기록, 통화 메타데이터, 리포트 결과' : 'Session records, call metadata, and report results'}</li>
+          <li>{isKo ? '구독 및 결제 상태 정보' : 'Subscription and billing status information'}</li>
+          <li>{isKo ? '서비스 운영에 필요한 로그와 보안 이벤트' : 'Operational logs and security events required to run the service'}</li>
         </ul>
+      </section>
 
-        <h2 className="text-lg font-semibold mt-6">2. 개인정보의 수집 및 이용 목적</h2>
-        <ul className="list-disc pl-5 space-y-1">
-          <li>서비스 제공 및 회원 관리</li>
-          <li>AI 언어 학습 평가 리포트 생성</li>
-          <li>결제 및 구독 관리</li>
-          <li>고객 지원 및 공지사항 전달</li>
+      <section className="space-y-3">
+        <h2>{isKo ? '2. 정보 이용 목적' : '2. Why we use it'}</h2>
+        <ul>
+          <li>{isKo ? '전화번호 OTP 인증 및 계정 보호' : 'Phone OTP authentication and account protection'}</li>
+          <li>{isKo ? '실시간 회화 세션 제공 및 세션 기록 유지' : 'Realtime speaking sessions and session history'}</li>
+          <li>{isKo ? '리포트 생성 및 학습 피드백 제공' : 'Report generation and learning feedback'}</li>
+          <li>{isKo ? '결제 확인, 구독 유지, 고객 지원 대응' : 'Billing confirmation, subscription management, and support'}</li>
         </ul>
+      </section>
 
-        <h2 className="text-lg font-semibold mt-6">3. 개인정보의 보유 및 이용 기간</h2>
+      <section className="space-y-3">
+        <h2>{isKo ? '3. 보관 기간' : '3. Retention'}</h2>
         <p>
-          회원 탈퇴 시 즉시 파기하며, 관련 법령에 따라 보존이 필요한 경우 해당 기간 동안 보관합니다.
+          {isKo
+            ? '계정과 세션 데이터는 서비스 운영 및 결제 이력 확인에 필요한 기간 동안 보관합니다. 법령상 보존 의무가 없는 정보는 서비스 운영 목적이 끝나면 삭제 또는 비식별화합니다.'
+            : 'Account and session data are retained only for the period needed to operate the service and confirm billing history. Data without an ongoing operational or legal need is deleted or de-identified.'}
         </p>
+      </section>
 
-        <h2 className="text-lg font-semibold mt-6">4. 제3자 제공</h2>
+      <section className="space-y-3">
+        <h2>{isKo ? '4. 제3자 제공 및 외부 처리' : '4. Third-party processing'}</h2>
         <p>
-          이용자의 동의 없이 제3자에게 개인정보를 제공하지 않습니다. 단, 법령에 의한 경우는 예외입니다.
+          {isKo
+            ? '서비스는 OpenAI, Toss Payments, SOLAPI, Supabase 등 외부 서비스와 연동됩니다. 이들은 각자의 역할에 필요한 범위 안에서만 데이터를 처리합니다.'
+            : 'The service integrates with providers such as OpenAI, Toss Payments, SOLAPI, and Supabase. Each provider processes data only within the scope required for its role.'}
         </p>
+      </section>
 
-        <h2 className="text-lg font-semibold mt-6">5. 이용자의 권리 (GDPR)</h2>
-        <ul className="list-disc pl-5 space-y-1">
-          <li>접근권, 정정권, 삭제권, 처리 제한권, 이동권</li>
-          <li>문의: support@linguacall.app</li>
-        </ul>
-
-        <h2 className="text-lg font-semibold mt-6">6. 문의처</h2>
-        <p>개인정보 보호 책임자: support@linguacall.app</p>
-
-        <p className="text-xs text-muted-foreground mt-8">최종 업데이트: 2026년 3월</p>
-      </div>
-    </div>
+      <section className="space-y-3">
+        <h2>{isKo ? '5. 이용자의 권리' : '5. Your rights'}</h2>
+        <p>
+          {isKo
+            ? '사용자는 본인의 정보에 대한 열람, 수정, 삭제를 요청할 수 있습니다. 계정 또는 개인정보 처리 관련 문의는 support@linguacall.shop 으로 접수합니다.'
+            : 'You may request access to, correction of, or deletion of your data. Contact support@linguacall.shop for account or privacy requests.'}
+        </p>
+      </section>
+    </StaticDocumentPage>
   );
 }

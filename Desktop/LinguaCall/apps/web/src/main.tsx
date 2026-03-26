@@ -7,7 +7,7 @@ import './styles.css';
 
 const ErrorFallback = () => (
   <div style={{ padding: '2rem', textAlign: 'center' }}>
-    <p>문제가 발생했습니다. 새로고침해주세요.</p>
+    <p>문제가 발생했습니다. 새로고침 후 다시 시도해주세요.</p>
     <button onClick={() => window.location.reload()}>새로고침</button>
   </div>
 );

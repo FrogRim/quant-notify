@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import LanguagePicker from '../components/ui/LanguagePicker';
 import type {
   Session,
   BillingPlan,
   UserProfile,
+  UserSubscription,
   Report,
   SessionMessagesResponse,
   CreateSessionPayload,
@@ -22,14 +22,17 @@ import {
   attachOrDisposeResolvedController,
   planLiveSessionEnd
 } from '../features/session/liveSession';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import LanguagePicker from '../components/ui/LanguagePicker';
+import { AppShell, HeroSection, PageHeader } from '../components/layout/AppShell';
+import { SectionCard, MetricCard, StatusBanner, EmptyState } from '../components/layout/SectionCard';
 import { useUser } from '../context/UserContext';
 import { apiClient, describeApiError, normalizeApiError } from '../lib/api';
+import { getFriendlyCopy, getLanguageDisplayName } from '../content/friendlyCopy';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
 
@@ -71,7 +74,9 @@ function getStatusBadgeVariant(
 ): 'default' | 'secondary' | 'destructive' | 'outline' | 'indigo' | 'softRed' {
   if (['in_progress', 'connecting'].includes(status)) return 'default';
   if (status === 'completed') return 'indigo';
-  if (['failed', 'cancelled', 'provider_error', 'user_cancelled', 'schedule_missed', 'no_answer'].includes(status)) return 'softRed';
+  if (['failed', 'cancelled', 'provider_error', 'user_cancelled', 'schedule_missed', 'no_answer'].includes(status)) {
+    return 'softRed';
+  }
   return 'outline';
 }
 
@@ -82,117 +87,142 @@ type DetailState =
   | { kind: 'transcript'; data: SessionMessagesResponse }
   | { kind: 'error'; message: string };
 
+type TopicOption = { value: string; labelKey: string };
+type LangExamConfig = {
+  exam: string;
+  defaultLevel: string;
+  defaultTopic: string;
+  levelOptions: string[];
+  topicOptions: TopicOption[];
+};
+
+const LANG_CONFIGS: Record<string, LangExamConfig> = {
+  en: {
+    exam: 'opic',
+    defaultLevel: 'IM3',
+    defaultTopic: 'daily conversation',
+    levelOptions: ['NL', 'NM', 'NH', 'IL', 'IM1', 'IM2', 'IM3', 'IH', 'AL'],
+    topicOptions: [
+      { value: 'daily conversation', labelKey: 'en_daily' },
+      { value: 'travel', labelKey: 'en_travel' },
+      { value: 'work & career', labelKey: 'en_work' },
+      { value: 'technology', labelKey: 'en_tech' },
+      { value: 'environment', labelKey: 'en_environment' },
+      { value: 'health', labelKey: 'en_health' },
+      { value: 'education', labelKey: 'en_education' }
+    ]
+  },
+  de: {
+    exam: 'goethe_b2',
+    defaultLevel: 'B1',
+    defaultTopic: 'Studium und Beruf',
+    levelOptions: ['A2', 'B1', 'B2'],
+    topicOptions: [
+      { value: 'Studium und Beruf', labelKey: 'de_study' },
+      { value: 'Gesellschaft und Kultur', labelKey: 'de_society' },
+      { value: 'Umwelt und Natur', labelKey: 'de_environment' },
+      { value: 'Gesundheit', labelKey: 'de_health' },
+      { value: 'Reisen', labelKey: 'de_travel' },
+      { value: 'Technik und Medien', labelKey: 'de_tech' },
+      { value: 'Kunst und Literatur', labelKey: 'de_art' }
+    ]
+  },
+  zh: {
+    exam: 'hsk5',
+    defaultLevel: 'HSK4',
+    defaultTopic: 'work & profession',
+    levelOptions: ['HSK3', 'HSK4', 'HSK5'],
+    topicOptions: [
+      { value: 'work & profession', labelKey: 'zh_work' },
+      { value: 'culture & society', labelKey: 'zh_culture' },
+      { value: 'technology & innovation', labelKey: 'zh_tech' },
+      { value: 'environment & nature', labelKey: 'zh_environment' },
+      { value: 'travel & life', labelKey: 'zh_travel' },
+      { value: 'education & learning', labelKey: 'zh_education' }
+    ]
+  },
+  es: {
+    exam: 'dele_b1',
+    defaultLevel: 'A2',
+    defaultTopic: 'vida cotidiana',
+    levelOptions: ['A1', 'A2', 'B1'],
+    topicOptions: [
+      { value: 'vida cotidiana', labelKey: 'es_daily' },
+      { value: 'viajes y turismo', labelKey: 'es_travel' },
+      { value: 'trabajo y profesion', labelKey: 'es_work' },
+      { value: 'cultura y sociedad', labelKey: 'es_culture' },
+      { value: 'salud', labelKey: 'es_health' },
+      { value: 'tecnologia', labelKey: 'es_tech' }
+    ]
+  },
+  ja: {
+    exam: 'jlpt_n2',
+    defaultLevel: 'N3',
+    defaultTopic: 'work & daily life',
+    levelOptions: ['N4', 'N3', 'N2', 'N1'],
+    topicOptions: [
+      { value: 'work & daily life', labelKey: 'ja_work' },
+      { value: 'travel & tourism', labelKey: 'ja_travel' },
+      { value: 'society & culture', labelKey: 'ja_society' },
+      { value: 'technology & innovation', labelKey: 'ja_tech' },
+      { value: 'environment & nature', labelKey: 'ja_environment' },
+      { value: 'education & learning', labelKey: 'ja_education' },
+      { value: 'health & life', labelKey: 'ja_health' }
+    ]
+  },
+  fr: {
+    exam: 'delf_b1',
+    defaultLevel: 'A2',
+    defaultTopic: 'vie quotidienne',
+    levelOptions: ['A1', 'A2', 'B1'],
+    topicOptions: [
+      { value: 'vie quotidienne', labelKey: 'fr_daily' },
+      { value: 'voyages et tourisme', labelKey: 'fr_travel' },
+      { value: 'travail et carriere', labelKey: 'fr_work' },
+      { value: 'culture et societe', labelKey: 'fr_culture' },
+      { value: 'sante', labelKey: 'fr_health' },
+      { value: 'technologie', labelKey: 'fr_tech' },
+      { value: 'environnement', labelKey: 'fr_environment' }
+    ]
+  }
+};
+
 export default function ScreenSession() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { getToken, clearIdentity } = useUser();
   const navigate = useNavigate();
+  const copy = getFriendlyCopy(i18n.language);
+  const isKo = i18n.language.startsWith('ko');
 
-  type TopicOption = { value: string; labelKey: string };
-  type LangExamConfig = {
-    exam: string;
-    defaultLevel: string;
-    defaultTopic: string;
-    levelOptions: string[];
-    topicOptions: TopicOption[];
-  };
-
-  const LANG_CONFIGS: Record<string, LangExamConfig> = {
-    en: {
-      exam: 'opic',
-      defaultLevel: 'IM3',
-      defaultTopic: 'daily conversation',
-      levelOptions: ['NL', 'NM', 'NH', 'IL', 'IM1', 'IM2', 'IM3', 'IH', 'AL'],
-      topicOptions: [
-        { value: 'daily conversation', labelKey: 'en_daily' },
-        { value: 'travel', labelKey: 'en_travel' },
-        { value: 'work & career', labelKey: 'en_work' },
-        { value: 'technology', labelKey: 'en_tech' },
-        { value: 'environment', labelKey: 'en_environment' },
-        { value: 'health', labelKey: 'en_health' },
-        { value: 'education', labelKey: 'en_education' }
-      ]
-    },
-    de: {
-      exam: 'goethe_b2',
-      defaultLevel: 'B1',
-      defaultTopic: 'Studium und Beruf',
-      levelOptions: ['A2', 'B1', 'B2'],
-      topicOptions: [
-        { value: 'Studium und Beruf', labelKey: 'de_study' },
-        { value: 'Gesellschaft und Kultur', labelKey: 'de_society' },
-        { value: 'Umwelt und Natur', labelKey: 'de_environment' },
-        { value: 'Gesundheit', labelKey: 'de_health' },
-        { value: 'Reisen', labelKey: 'de_travel' },
-        { value: 'Technik und Medien', labelKey: 'de_tech' },
-        { value: 'Kunst und Literatur', labelKey: 'de_art' }
-      ]
-    },
-    zh: {
-      exam: 'hsk5',
-      defaultLevel: 'HSK4',
-      defaultTopic: '工作与职业',
-      levelOptions: ['HSK3', 'HSK4', 'HSK5'],
-      topicOptions: [
-        { value: '工作与职业', labelKey: 'zh_work' },
-        { value: '文化与社会', labelKey: 'zh_culture' },
-        { value: '科技与创新', labelKey: 'zh_tech' },
-        { value: '环境与自然', labelKey: 'zh_environment' },
-        { value: '旅行与生活', labelKey: 'zh_travel' },
-        { value: '教育与学习', labelKey: 'zh_education' }
-      ]
-    },
-    es: {
-      exam: 'dele_b1',
-      defaultLevel: 'A2',
-      defaultTopic: 'vida cotidiana',
-      levelOptions: ['A1', 'A2', 'B1'],
-      topicOptions: [
-        { value: 'vida cotidiana', labelKey: 'es_daily' },
-        { value: 'viajes y turismo', labelKey: 'es_travel' },
-        { value: 'trabajo y profesión', labelKey: 'es_work' },
-        { value: 'cultura y sociedad', labelKey: 'es_culture' },
-        { value: 'salud', labelKey: 'es_health' },
-        { value: 'tecnología', labelKey: 'es_tech' }
-      ]
-    },
-    ja: {
-      exam: 'jlpt_n2',
-      defaultLevel: 'N3',
-      defaultTopic: '仕事と日常生活',
-      levelOptions: ['N4', 'N3', 'N2', 'N1'],
-      topicOptions: [
-        { value: '仕事と日常生活', labelKey: 'ja_work' },
-        { value: '旅行と観光', labelKey: 'ja_travel' },
-        { value: '社会と文化', labelKey: 'ja_society' },
-        { value: '技術と革新', labelKey: 'ja_tech' },
-        { value: '環境と自然', labelKey: 'ja_environment' },
-        { value: '教育と学習', labelKey: 'ja_education' },
-        { value: '健康と生活', labelKey: 'ja_health' }
-      ]
-    },
-    fr: {
-      exam: 'delf_b1',
-      defaultLevel: 'A2',
-      defaultTopic: 'vie quotidienne',
-      levelOptions: ['A1', 'A2', 'B1'],
-      topicOptions: [
-        { value: 'vie quotidienne', labelKey: 'fr_daily' },
-        { value: 'voyages et tourisme', labelKey: 'fr_travel' },
-        { value: 'travail et carrière', labelKey: 'fr_work' },
-        { value: 'culture et société', labelKey: 'fr_culture' },
-        { value: 'santé', labelKey: 'fr_health' },
-        { value: 'technologie', labelKey: 'fr_tech' },
-        { value: 'environnement', labelKey: 'fr_environment' }
-      ]
-    }
-  };
-
-  // Form state
   const [language, setLanguage] = useState<'en' | 'de' | 'zh' | 'es' | 'ja' | 'fr'>('en');
   const [mode, setMode] = useState<'immediate' | 'scheduled_once'>('immediate');
   const [level, setLevel] = useState('IM3');
   const [topic, setTopic] = useState('daily conversation');
   const [duration, setDuration] = useState(10);
+  const [scheduledFor, setScheduledFor] = useState('');
+  const [durationOptions, setDurationOptions] = useState([10]);
+  const [formLoading, setFormLoading] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [formMessage, setFormMessage] = useState('');
+
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [globalMessage, setGlobalMessage] = useState('');
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [subscription, setSubscription] = useState<UserSubscription | null>(null);
+  const [plans, setPlans] = useState<BillingPlan[]>([]);
+
+  const activeRef = useRef<ActiveWebVoiceSession | null>(null);
+  const [activeSession, setActiveSession] = useState<ActiveWebVoiceSession | null>(null);
+
+  const [editTimes, setEditTimes] = useState<Record<string, string>>({});
+  const [detail, setDetail] = useState<DetailState>({ kind: 'idle' });
+
+  const composerRef = useRef<HTMLDivElement | null>(null);
+  const historyRef = useRef<HTMLDivElement | null>(null);
+  const detailRef = useRef<HTMLDivElement | null>(null);
+
+  const makeApi = useCallback(() => apiClient(getToken), [getToken]);
 
   const handleLanguageChange = (lang: 'en' | 'de' | 'zh' | 'es' | 'ja' | 'fr') => {
     const cfg = LANG_CONFIGS[lang];
@@ -200,28 +230,36 @@ export default function ScreenSession() {
     setLevel(cfg.defaultLevel);
     setTopic(cfg.defaultTopic);
   };
-  const [scheduledFor, setScheduledFor] = useState('');
-  const [durationOptions, setDurationOptions] = useState([10]);
-  const [formLoading, setFormLoading] = useState(false);
-  const [formError, setFormError] = useState('');
-  const [formMessage, setFormMessage] = useState('');
 
-  // Sessions
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [sessionsLoading, setSessionsLoading] = useState(false);
-  const [globalMessage, setGlobalMessage] = useState('');
+  const loadAccountState = useCallback(async () => {
+    const api = makeApi();
+    try {
+      const [nextProfile, nextPlans, nextSubscription] = await Promise.all([
+        api.get<UserProfile>('/users/me'),
+        api.get<BillingPlan[]>('/billing/plans'),
+        api.get<UserSubscription | null>('/billing/subscription').catch(() => null)
+      ]);
 
-  // Active voice session ??both ref (for callbacks) and state (for rendering)
-  const activeRef = useRef<ActiveWebVoiceSession | null>(null);
-  const [activeSession, setActiveSession] = useState<ActiveWebVoiceSession | null>(null);
+      setProfile(nextProfile);
+      setPlans(nextPlans);
+      setSubscription(nextSubscription);
 
-  // Per-session edit times
-  const [editTimes, setEditTimes] = useState<Record<string, string>>({});
-
-  // Detail panel
-  const [detail, setDetail] = useState<DetailState>({ kind: 'idle' });
-
-  const makeApi = useCallback(() => apiClient(getToken), [getToken]);
+      const activePlan =
+        nextPlans.find(plan => plan.code === nextProfile.planCode) ??
+        nextPlans.find(plan => plan.code === 'free');
+      const max = activePlan?.maxSessionMinutes && activePlan.maxSessionMinutes >= 10
+        ? activePlan.maxSessionMinutes
+        : 10;
+      const options = [10];
+      if (max >= 15) options.push(15);
+      setDurationOptions([...new Set(options)].sort((a, b) => a - b));
+      if (!options.includes(duration)) {
+        setDuration(options[0]);
+      }
+    } catch {
+      setDurationOptions([10]);
+    }
+  }, [duration, makeApi]);
 
   const loadSessions = useCallback(async (showLoading = true) => {
     const api = makeApi();
@@ -236,29 +274,10 @@ export default function ScreenSession() {
     }
   }, [makeApi]);
 
-  const loadDurationOptions = useCallback(async () => {
-    const api = makeApi();
-    try {
-      const [profile, plans] = await Promise.all([
-        api.get<UserProfile>('/users/me'),
-        api.get<BillingPlan[]>('/billing/plans')
-      ]);
-      const plan = plans.find(p => p.code === profile.planCode);
-      const max = plan?.maxSessionMinutes && plan.maxSessionMinutes >= 10
-        ? plan.maxSessionMinutes
-        : 10;
-      const opts = [10];
-      if (max >= 15) opts.push(15);
-      setDurationOptions([...new Set(opts)].sort((a, b) => a - b));
-    } catch {
-      setDurationOptions([10]);
-    }
-  }, [makeApi]);
-
   useEffect(() => {
-    void loadDurationOptions();
+    void loadAccountState();
     void loadSessions();
-  }, [loadDurationOptions, loadSessions]);
+  }, [loadAccountState, loadSessions]);
 
   const sessionsRef = useRef<Session[]>([]);
   useEffect(() => {
@@ -332,9 +351,9 @@ export default function ScreenSession() {
             void loadSessions();
           }
         },
-        onTranscriptChange: (transcript) => {
+        onTranscriptChange: transcript => {
           if (!activeRef.current || activeRef.current.sessionId !== sessionId) return;
-          const lines = transcript.map(e => `${e.role}: ${e.content}`);
+          const lines = transcript.map(entry => `${entry.role}: ${entry.content}`);
           syncActive({ ...activeRef.current, transcript: lines });
         }
       });
@@ -343,7 +362,7 @@ export default function ScreenSession() {
         activeSession: activeRef.current,
         sessionId,
         controller,
-        connectedNote: 'Waiting for OpenAI Realtime connection...'
+        connectedNote: isKo ? 'OpenAI 음성 연결을 준비하고 있습니다...' : 'Waiting for OpenAI Realtime connection...'
       });
 
       if (resolution.kind === 'attached') {
@@ -385,7 +404,7 @@ export default function ScreenSession() {
           : 'session created. Start the call when ready.'
       );
       setDetail({ kind: 'idle' });
-      await loadSessions();
+      await Promise.all([loadSessions(), loadAccountState()]);
     } catch (err) {
       setFormError(describeApiError(err, 'session_create'));
     } finally {
@@ -396,13 +415,14 @@ export default function ScreenSession() {
   const handleViewReport = async (sessionId: string) => {
     const api = makeApi();
     setDetail({ kind: 'loading' });
+    detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     try {
       let report: Report;
       try {
         report = await api.get<Report>(`/sessions/${sessionId}/report`);
       } catch (err) {
-        const e = normalizeApiError(err);
-        if (!['not_found', 'conflict'].includes(e.code)) throw err;
+        const normalized = normalizeApiError(err);
+        if (!['not_found', 'conflict'].includes(normalized.code)) throw err;
         report = await api.post<Report>(`/sessions/${sessionId}/report`, {});
       }
       setDetail({ kind: 'report', report });
@@ -414,10 +434,9 @@ export default function ScreenSession() {
   const handleViewTranscript = async (sessionId: string) => {
     const api = makeApi();
     setDetail({ kind: 'loading' });
+    detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     try {
-      const data = await api.get<SessionMessagesResponse>(
-        `/sessions/${sessionId}/messages?limit=50`
-      );
+      const data = await api.get<SessionMessagesResponse>(`/sessions/${sessionId}/messages?limit=50`);
       setDetail({ kind: 'transcript', data });
     } catch (err) {
       setDetail({ kind: 'error', message: describeApiError(err, 'transcript_load') });
@@ -451,7 +470,7 @@ export default function ScreenSession() {
       await api.post<Session>(`/sessions/${sessionId}/cancel`, {});
       setGlobalMessage('session cancelled.');
       setDetail({ kind: 'idle' });
-      await loadSessions();
+      await Promise.all([loadSessions(), loadAccountState()]);
     } catch (err) {
       setGlobalMessage(`cancel failed: ${describeApiError(err, 'session_cancel')}`);
     }
@@ -459,11 +478,7 @@ export default function ScreenSession() {
 
   const handleEndCall = async (sessionId: string) => {
     const api = makeApi();
-    const activePlan = planLiveSessionEnd(
-      activeRef.current,
-      sessionId,
-      t('session.endCall')
-    );
+    const activePlan = planLiveSessionEnd(activeRef.current, sessionId, t('session.endCall'));
 
     if (activePlan.nextActiveSession !== activeRef.current) {
       syncActive(activePlan.nextActiveSession as ActiveWebVoiceSession | null);
@@ -480,7 +495,7 @@ export default function ScreenSession() {
         } catch (fallbackErr) {
           setGlobalMessage(`end failed: ${describeApiError(fallbackErr, 'call_end')}`);
         }
-        await loadSessions();
+        await Promise.all([loadSessions(), loadAccountState()]);
       }
       return;
     }
@@ -489,403 +504,586 @@ export default function ScreenSession() {
       await api.post<Session>(`/calls/${sessionId}/end`, {});
       setGlobalMessage('call ended. Report generation may follow shortly.');
       setDetail({ kind: 'idle' });
-      await loadSessions();
+      await Promise.all([loadSessions(), loadAccountState()]);
     } catch (err) {
       setGlobalMessage(`end failed: ${describeApiError(err, 'call_end')}`);
     }
   };
 
+  const nextScheduledSession = sessions.find(session => session.status === 'scheduled');
+  const recentCompletedSession = sessions.find(session => session.status === 'completed');
+  const activePlanDetails = plans.find(plan => plan.code === profile?.planCode) ?? null;
+  const bannerTone = globalMessage.includes('failed') || globalMessage.includes('error') ? 'danger' : 'neutral';
+
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-2xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between py-4">
-          <h1 className="text-2xl font-bold tracking-tighter text-foreground">LinguaCall</h1>
-          <div className="flex items-center gap-2">
-            <LanguagePicker />
-            <Button variant="outline" size="sm" onClick={() => navigate('/billing')}>
-              {t('nav.billing')}
+    <AppShell
+      headerActions={
+        <>
+          <LanguagePicker />
+          <Button variant="outline" size="sm" onClick={() => navigate('/billing')}>
+            {t('nav.billing')}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={clearIdentity}>
+            {t('nav.signOut')}
+          </Button>
+        </>
+      }
+    >
+      <HeroSection
+        eyebrow={copy.session.eyebrow}
+        title={copy.session.title}
+        description={copy.session.description}
+        actions={
+          <>
+            <Button size="lg" onClick={() => composerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+              {isKo ? '지금 세션 만들기' : 'Create a session now'}
             </Button>
-            <Button variant="ghost" size="sm" onClick={clearIdentity}>
-              {t('nav.signOut')}
+            <Button size="lg" variant="outline" onClick={() => historyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+              {isKo ? '최근 세션 보기' : 'View recent sessions'}
             </Button>
+          </>
+        }
+        aside={
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            <MetricCard
+              label={isKo ? '현재 플랜' : 'Current plan'}
+              value={activePlanDetails?.displayName ?? (profile?.planCode ?? 'free')}
+              tone="primary"
+              detail={subscription?.status ?? (isKo ? '활성 상태' : 'active state')}
+            />
+            <MetricCard
+              label={isKo ? '체험 통화' : 'Trial calls'}
+              value={String(profile?.trialCallsRemaining ?? 0)}
+            />
+            <MetricCard
+              label={isKo ? '유료 분수' : 'Paid minutes'}
+              value={String(profile?.paidMinutesBalance ?? 0)}
+            />
+          </div>
+        }
+      />
+
+      {globalMessage && <StatusBanner tone={bannerTone}>{globalMessage}</StatusBanner>}
+      {formMessage && <StatusBanner tone="success">{formMessage}</StatusBanner>}
+
+      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <div className="space-y-6">
+          {activeSession && (
+            <LiveSessionCard
+              title={copy.session.liveTitle}
+              description={copy.session.liveDescription}
+              activeSession={activeSession}
+              onEnd={() => void handleEndCall(activeSession.sessionId)}
+              isKo={isKo}
+            />
+          )}
+
+          <div ref={composerRef}>
+            <SectionCard title={copy.session.composerTitle} description={copy.session.composerDescription}>
+              <form onSubmit={event => void handleFormSubmit(event)} className="space-y-5">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>{t('session.language')}</Label>
+                    <Select value={language} onValueChange={value => handleLanguageChange(value as 'en' | 'de' | 'zh' | 'es' | 'ja' | 'fr')}>
+                      <SelectTrigger className="rounded-2xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.keys(LANG_CONFIGS).map(code => (
+                          <SelectItem key={code} value={code}>
+                            {getLanguageDisplayName(code)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t('session.mode')}</Label>
+                    <Select value={mode} onValueChange={value => setMode(value as 'immediate' | 'scheduled_once')}>
+                      <SelectTrigger className="rounded-2xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="immediate">{t('session.modeImmediate')}</SelectItem>
+                        <SelectItem value="scheduled_once">{t('session.modeScheduled')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>{t('session.level')}</Label>
+                    <Select value={level} onValueChange={setLevel}>
+                      <SelectTrigger className="rounded-2xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {LANG_CONFIGS[language].levelOptions.map(option => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t('session.topic')}</Label>
+                    <Select value={topic} onValueChange={setTopic}>
+                      <SelectTrigger className="rounded-2xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {LANG_CONFIGS[language].topicOptions.map(option => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {t(`session.topicLabels.${option.labelKey}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-[0.55fr_0.45fr]">
+                  <div className="space-y-2">
+                    <Label>{t('session.duration')}</Label>
+                    <Select value={String(duration)} onValueChange={value => setDuration(Number(value))}>
+                      <SelectTrigger className="rounded-2xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {durationOptions.map(option => (
+                          <SelectItem key={option} value={String(option)}>
+                            {option} min
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {mode === 'scheduled_once' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="scheduledFor">{t('session.scheduleTime')}</Label>
+                      <Input
+                        id="scheduledFor"
+                        type="datetime-local"
+                        className="h-10 rounded-2xl"
+                        value={scheduledFor}
+                        onChange={event => setScheduledFor(event.target.value)}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {formError && <StatusBanner tone="danger">{formError}</StatusBanner>}
+
+                <div className="flex flex-wrap gap-3">
+                  <Button type="submit" size="lg" className="w-full sm:w-auto" disabled={formLoading}>
+                    {formLoading ? t('session.creating') : t('session.createSession')}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="w-full sm:w-auto"
+                    onClick={() => historyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  >
+                    {copy.session.historyTitle}
+                  </Button>
+                </div>
+              </form>
+            </SectionCard>
           </div>
         </div>
 
-        {globalMessage && (
-          <div className="rounded-md bg-secondary border border-border px-3 py-2 text-sm text-secondary-foreground">
-            {globalMessage}
+        <div className="space-y-6">
+          <SectionCard title={copy.session.quickActionsTitle} description={copy.session.description}>
+            <div className="grid gap-3">
+              <QuickActionCard
+                title={copy.session.quickActions[0].title}
+                description={copy.session.quickActions[0].description}
+                cta={isKo ? '새 세션 열기' : 'Open the form'}
+                onClick={() => composerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              />
+              <QuickActionCard
+                title={copy.session.quickActions[1].title}
+                description={nextScheduledSession?.scheduledForAtUtc
+                  ? `${copy.session.quickActions[1].description} ${formatSessionTime(nextScheduledSession.scheduledForAtUtc)}`
+                  : copy.session.quickActions[1].description}
+                cta={isKo ? '예약 보기' : 'View schedule'}
+                onClick={() => historyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              />
+              <QuickActionCard
+                title={copy.session.quickActions[2].title}
+                description={copy.session.quickActions[2].description}
+                cta={isKo ? '리포트 열기' : 'Open report'}
+                disabled={!recentCompletedSession}
+                onClick={() => recentCompletedSession ? void handleViewReport(recentCompletedSession.id) : undefined}
+              />
+            </div>
+          </SectionCard>
+
+          <div ref={detailRef}>
+            <SectionCard title={copy.session.detailTitle} description={copy.session.detailDescription}>
+              <DetailPanel
+                detail={detail}
+                onClose={() => setDetail({ kind: 'idle' })}
+                onOpenStandalone={report => navigate(`/report/${encodeURIComponent(report.publicId)}`)}
+                isKo={isKo}
+              />
+            </SectionCard>
           </div>
-        )}
+        </div>
+      </div>
 
-        {/* Active Voice Session Panel */}
-        {activeSession && (
-          <Card className="border-indigo-200 bg-indigo-50/50">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse inline-block" />
-                {t('session.transcript')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">
-                  {activeSession.note ?? activeSession.state}
-                </span>
-                <Badge variant={activeSession.state === 'live' ? 'default' : 'secondary'}>
-                  {activeSession.state}
-                </Badge>
-              </div>
-              {activeSession.transcript.length > 0 && (
-                <div className="bg-card rounded-md p-3 max-h-32 overflow-y-auto space-y-1">
-                  {activeSession.transcript.slice(-6).map((line, i) => (
-                    <p key={i} className="text-xs text-foreground">
-                      {line}
-                    </p>
-                  ))}
-                </div>
-              )}
-              {activeSession.controller && (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => void handleEndCall(activeSession.sessionId)}
-                >
-                  {t('session.endCall')}
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Create Session Form */}
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('session.newSession')}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={e => void handleFormSubmit(e)} className="space-y-6">
-              {/* Language / Contact Mode row */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>{t('session.language')}</Label>
-                  <Select value={language} onValueChange={(v) => handleLanguageChange(v as 'en' | 'de' | 'zh' | 'es' | 'ja' | 'fr')}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="en">🇺🇸 English — OPIC</SelectItem>
-                      <SelectItem value="de">🇩🇪 Deutsch — Goethe B2</SelectItem>
-                      <SelectItem value="zh">🇨🇳 中文 — HSK 5</SelectItem>
-                      <SelectItem value="es">🇪🇸 Español — DELE B1</SelectItem>
-                      <SelectItem value="ja">🇯🇵 日本語 — JLPT N2</SelectItem>
-                      <SelectItem value="fr">🇫🇷 Français — DELF B1</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>{t('session.mode')}</Label>
-                  <Select value={mode} onValueChange={(v) => setMode(v as 'immediate' | 'scheduled_once')}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="immediate">{t('session.modeImmediate')}</SelectItem>
-                      <SelectItem value="scheduled_once">{t('session.modeScheduled')}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {/* Level / Topic row */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>{t('session.level')}</Label>
-                  <Select value={level} onValueChange={setLevel}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {LANG_CONFIGS[language].levelOptions.map(l => (
-                        <SelectItem key={l} value={l}>{l}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>{t('session.topic')}</Label>
-                  <Select value={topic} onValueChange={setTopic}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {LANG_CONFIGS[language].topicOptions.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {t(`session.topicLabels.${opt.labelKey}`)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {/* Duration row */}
-              <div className="space-y-2">
-                <Label>{t('session.duration')}</Label>
-                <Select value={String(duration)} onValueChange={(v) => setDuration(Number(v))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {durationOptions.map(m => (
-                      <SelectItem key={m} value={String(m)}>{m} min</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {mode === 'scheduled_once' && (
-                <div className="space-y-2">
-                  <Label htmlFor="scheduledFor">{t('session.scheduleTime')}</Label>
-                  <Input
-                    id="scheduledFor"
-                    type="datetime-local"
-                    value={scheduledFor}
-                    onChange={e => setScheduledFor(e.target.value)}
-                  />
-                </div>
-              )}
-              {formError && <p className="text-sm text-destructive">{formError}</p>}
-              {formMessage && <p className="text-sm text-green-600">{formMessage}</p>}
-              <Button type="submit" disabled={formLoading} className="w-full">
-                {formLoading ? t('session.creating') : t('session.createSession')}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        {/* Sessions List */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle>{t('session.sessionList')}</CardTitle>
+      <div ref={historyRef}>
+        <PageHeader
+          eyebrow={copy.session.historyTitle}
+          title={t('session.sessionList')}
+          description={copy.session.historyDescription}
+          actions={
             <Button variant="outline" size="sm" onClick={() => void loadSessions()}>
               {t('common.retry')}
             </Button>
-          </CardHeader>
-          <CardContent>
-            {sessionsLoading ? (
-              <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
-            ) : sessions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t('session.noSessions')}</p>
-            ) : (
-              <div className="space-y-3">
-                {sessions.map(session => (
-                  <div
-                    key={session.id}
-                    className="border border-border rounded-lg p-4 space-y-2"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-sm capitalize">
-                        {session.contactMode.replace('_', ' ')}
-                      </span>
-                      <Badge variant={getStatusBadgeVariant(session.status)}>
-                        {session.status}
-                      </Badge>
-                    </div>
-                    <div className="text-xs text-muted-foreground space-y-0.5">
-                      <div>
-                        {session.language?.toUpperCase() ?? 'EN'} · {session.exam?.toUpperCase().replace('_', ' ') ?? 'OPIC'} · {session.topic} · {session.durationMinutes}min · Level:{' '}
-                        {session.level}
-                      </div>
-                      {session.scheduledForAtUtc && (
-                        <div>Scheduled: {formatSessionTime(session.scheduledForAtUtc)}</div>
-                      )}
-                      {session.failureReason && (
-                        <div className="text-destructive">
-                          Failure: {session.failureReason}
-                        </div>
-                      )}
-                    </div>
-
-                    {session.status === 'scheduled' && (
-                      <div className="flex gap-2 items-center">
-                        <Input
-                          type="datetime-local"
-                          className="h-8 text-xs"
-                          value={
-                            editTimes[session.id] ??
-                            toDateTimeLocalValue(session.scheduledForAtUtc)
-                          }
-                          onChange={e =>
-                            setEditTimes(prev => ({ ...prev, [session.id]: e.target.value }))
-                          }
-                        />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => void handleUpdateSchedule(session.id)}
-                        >
-                          Update
-                        </Button>
-                      </div>
-                    )}
-
-                    <div className="flex gap-2 flex-wrap pt-1">
-                      {session.status === 'ready' && (
-                        <Button
-                          size="sm"
-                          onClick={() => void beginWebVoiceSession(session.id, false)}
-                        >
-                          {t('session.startCall')}
-                        </Button>
-                      )}
-                      {session.status === 'scheduled' && canJoinScheduledSession(session) && (
-                        <Button
-                          size="sm"
-                          onClick={() => void beginWebVoiceSession(session.id, true)}
-                        >
-                          {t('session.joinSession')}
-                        </Button>
-                      )}
-                      {session.status === 'scheduled' && (
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => void handleCancel(session.id)}
-                        >
-                          {t('session.cancelSession')}
-                        </Button>
-                      )}
-                      {['connecting', 'dialing', 'ringing', 'in_progress', 'ending'].includes(
-                        session.status
-                      ) && (
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => void handleEndCall(session.id)}
-                        >
-                          {t('session.endCall')}
-                        </Button>
-                      )}
-                      {session.status === 'completed' && (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => void handleViewReport(session.id)}
-                          >
-                            {t('session.viewReport')}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => void handleViewTranscript(session.id)}
-                          >
-                            {t('session.viewTranscript')}
-                          </Button>
-                        </>
-                      )}
-                      {session.callId && session.status !== 'completed' && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => void handleViewTranscript(session.id)}
-                        >
-                          {t('session.viewTranscript')}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Detail Panel */}
-        {detail.kind !== 'idle' && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle>
-                {detail.kind === 'transcript' ? t('session.viewTranscript') : t('report.title')}
-              </CardTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setDetail({ kind: 'idle' })}
-              >
-                {t('session.closeDetail')}
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {detail.kind === 'loading' && (
-                <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
-              )}
-              {detail.kind === 'error' && (
-                <p className="text-sm text-destructive">{detail.message}</p>
-              )}
-              {detail.kind === 'report' && (
-                <InlineReport
-                  report={detail.report}
-                  onOpenStandalone={() =>
-                    navigate(`/report/${encodeURIComponent(detail.report.publicId)}`)
-                  }
-                />
-              )}
-              {detail.kind === 'transcript' && (
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {detail.data.messages.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">{t('session.noTranscript')}</p>
-                  ) : (
-                    detail.data.messages.map(msg => (
-                      <div key={msg.sequenceNo} className="text-xs">
-                        <span className="font-medium capitalize">{msg.role}:</span>{' '}
-                        {msg.content}
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
+          }
+        />
       </div>
-    </div>
+
+      <SectionCard
+        title={copy.session.historyTitle}
+        description={copy.session.historyDescription}
+        action={
+          <Button variant="outline" size="sm" onClick={() => void Promise.all([loadSessions(), loadAccountState()])}>
+            {t('billing.reload')}
+          </Button>
+        }
+      >
+        {sessionsLoading ? (
+          <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+        ) : sessions.length === 0 ? (
+          <EmptyState
+            title={isKo ? '아직 세션이 없습니다' : 'No sessions yet'}
+            description={isKo
+              ? '첫 번째 짧은 통화를 만들어 보세요. 바로 시작하거나 예약해 둘 수 있습니다.'
+              : 'Create your first short call. You can start right away or schedule it for later.'}
+            action={
+              <Button onClick={() => composerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+                {isKo ? '세션 만들기' : 'Create a session'}
+              </Button>
+            }
+          />
+        ) : (
+          <div className="space-y-4">
+            {sessions.map(session => (
+              <SessionRow
+                key={session.id}
+                session={session}
+                editValue={editTimes[session.id] ?? toDateTimeLocalValue(session.scheduledForAtUtc)}
+                onEditTimeChange={value => setEditTimes(prev => ({ ...prev, [session.id]: value }))}
+                onUpdateSchedule={() => void handleUpdateSchedule(session.id)}
+                onStart={() => void beginWebVoiceSession(session.id, false)}
+                onJoin={() => void beginWebVoiceSession(session.id, true)}
+                onCancel={() => void handleCancel(session.id)}
+                onEnd={() => void handleEndCall(session.id)}
+                onViewReport={() => void handleViewReport(session.id)}
+                onViewTranscript={() => void handleViewTranscript(session.id)}
+                t={t}
+                isKo={isKo}
+              />
+            ))}
+          </div>
+        )}
+      </SectionCard>
+    </AppShell>
   );
 }
 
-function InlineReport({
-  report,
-  onOpenStandalone
+function LiveSessionCard({
+  title,
+  description,
+  activeSession,
+  onEnd,
+  isKo
 }: {
-  report: Report;
-  onOpenStandalone: () => void;
+  title: string;
+  description: string;
+  activeSession: ActiveWebVoiceSession;
+  onEnd: () => void;
+  isKo: boolean;
 }) {
-  const ev = report.evaluation;
   return (
-    <div className="space-y-3 text-sm">
-      <div className="flex items-center gap-2">
-        <Badge variant={report.status === 'ready' ? 'default' : 'secondary'}>
-          {report.status}
-        </Badge>
-      </div>
-      {ev && (
-        <div className="grid grid-cols-4 gap-2 text-xs bg-secondary rounded-md p-3">
-          {[
-            { label: 'Total', value: ev.totalScore },
-            { label: 'Grammar', value: ev.grammarScore },
-            { label: 'Vocab', value: ev.vocabularyScore },
-            { label: 'Fluency', value: ev.fluencyScore }
-          ].map(({ label, value }) => (
-            <div key={label} className="text-center">
-              <div className="text-base font-bold text-primary">{value}</div>
-              <div className="text-muted-foreground">{label}</div>
-            </div>
-          ))}
+    <SectionCard title={title} description={description}>
+      <div className="space-y-4 rounded-[28px] border border-primary/15 bg-primary/[0.05] px-5 py-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="space-y-1">
+            <div className="text-sm font-medium text-slate-950">{activeSession.note ?? activeSession.state}</div>
+            <div className="text-xs text-muted-foreground">Session ID: {activeSession.sessionId}</div>
+          </div>
+          <Badge variant={activeSession.state === 'live' ? 'default' : 'secondary'}>
+            {activeSession.state}
+          </Badge>
         </div>
-      )}
-      {report.summaryText && <p className="text-muted-foreground">{report.summaryText}</p>}
-      <Button size="sm" variant="outline" onClick={onOpenStandalone}>
-        Open Full Report
+
+        {activeSession.transcript.length > 0 ? (
+          <div className="max-h-48 space-y-2 overflow-y-auto rounded-3xl border border-white bg-white/85 p-4">
+            {activeSession.transcript.slice(-6).map((line, index) => (
+              <p key={`${line}-${index}`} className="text-sm leading-6 text-slate-700">
+                {line}
+              </p>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-3xl border border-dashed border-white/90 bg-white/70 px-4 py-5 text-sm text-muted-foreground">
+            {isKo ? '첫 transcript가 들어오면 여기에 바로 표시됩니다.' : 'The first transcript line will appear here.'}
+          </div>
+        )}
+
+        <Button variant="destructive" onClick={onEnd}>
+          {isKo ? '통화 종료' : 'End call'}
+        </Button>
+      </div>
+    </SectionCard>
+  );
+}
+
+function QuickActionCard({
+  title,
+  description,
+  cta,
+  onClick,
+  disabled
+}: {
+  title: string;
+  description: string;
+  cta: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-4">
+      <div className="space-y-2">
+        <h3 className="text-base font-semibold tracking-tight text-slate-950">{title}</h3>
+        <p className="text-sm leading-6 text-muted-foreground">{description}</p>
+      </div>
+      <Button className="mt-4" variant={disabled ? 'secondary' : 'outline'} disabled={disabled} onClick={onClick}>
+        {cta}
       </Button>
     </div>
   );
 }
 
+function SessionRow({
+  session,
+  editValue,
+  onEditTimeChange,
+  onUpdateSchedule,
+  onStart,
+  onJoin,
+  onCancel,
+  onEnd,
+  onViewReport,
+  onViewTranscript,
+  t,
+  isKo
+}: {
+  session: Session;
+  editValue: string;
+  onEditTimeChange: (value: string) => void;
+  onUpdateSchedule: () => void;
+  onStart: () => void;
+  onJoin: () => void;
+  onCancel: () => void;
+  onEnd: () => void;
+  onViewReport: () => void;
+  onViewTranscript: () => void;
+  t: (key: string, options?: Record<string, unknown>) => string;
+  isKo: boolean;
+}) {
+  return (
+    <div className="rounded-[28px] border border-slate-200 bg-slate-50/80 p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={getStatusBadgeVariant(session.status)}>{session.status}</Badge>
+            <Badge variant="outline">{session.contactMode.replace('_', ' ')}</Badge>
+            {session.reportStatus === 'pending' && (
+              <Badge variant="secondary">{isKo ? '리포트 준비 중' : 'report pending'}</Badge>
+            )}
+          </div>
+          <div className="space-y-1">
+            <div className="text-lg font-semibold tracking-tight text-slate-950">
+              {getLanguageDisplayName(session.language)} / {session.level}
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {session.topic} / {session.durationMinutes} min
+            </div>
+            {session.scheduledForAtUtc && (
+              <div className="text-sm text-muted-foreground">
+                Scheduled: {formatSessionTime(session.scheduledForAtUtc)}
+              </div>
+            )}
+            {session.failureReason && (
+              <div className="text-sm text-destructive">Failure: {session.failureReason}</div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {session.status === 'ready' && <Button size="sm" onClick={onStart}>{t('session.startCall')}</Button>}
+          {session.status === 'scheduled' && canJoinScheduledSession(session) && (
+            <Button size="sm" onClick={onJoin}>{t('session.joinSession')}</Button>
+          )}
+          {session.status === 'scheduled' && (
+            <Button size="sm" variant="destructive" onClick={onCancel}>
+              {t('session.cancelSession')}
+            </Button>
+          )}
+          {['connecting', 'dialing', 'ringing', 'in_progress', 'ending'].includes(session.status) && (
+            <Button size="sm" variant="destructive" onClick={onEnd}>
+              {t('session.endCall')}
+            </Button>
+          )}
+          {session.status === 'completed' && (
+            <>
+              <Button size="sm" variant="outline" onClick={onViewReport}>
+                {t('session.viewReport')}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={onViewTranscript}>
+                {t('session.viewTranscript')}
+              </Button>
+            </>
+          )}
+          {session.callId && session.status !== 'completed' && (
+            <Button size="sm" variant="ghost" onClick={onViewTranscript}>
+              {t('session.viewTranscript')}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {session.status === 'scheduled' && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+          <Input
+            type="datetime-local"
+            className="rounded-2xl"
+            value={editValue}
+            onChange={event => onEditTimeChange(event.target.value)}
+          />
+          <Button variant="outline" onClick={onUpdateSchedule}>
+            Update
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DetailPanel({
+  detail,
+  onClose,
+  onOpenStandalone,
+  isKo
+}: {
+  detail: DetailState;
+  onClose: () => void;
+  onOpenStandalone: (report: Report) => void;
+  isKo: boolean;
+}) {
+  if (detail.kind === 'idle') {
+    return (
+      <EmptyState
+        title={isKo ? '아직 열린 상세 정보가 없습니다' : 'Nothing open yet'}
+        description={
+          isKo
+            ? '최근 세션의 리포트나 transcript 버튼을 누르면 이 패널에서 바로 내용을 확인할 수 있습니다.'
+            : 'Use report or transcript actions from a recent session. The detail panel stays out of the way until you need it.'
+        }
+      />
+    );
+  }
+
+  if (detail.kind === 'loading') {
+    return <StatusBanner>{isKo ? '상세 정보를 불러오는 중입니다...' : 'Loading detail...'}</StatusBanner>;
+  }
+
+  if (detail.kind === 'error') {
+    return <StatusBanner tone="danger">{detail.message}</StatusBanner>;
+  }
+
+  if (detail.kind === 'transcript') {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <Badge variant="secondary">transcript</Badge>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            {isKo ? '닫기' : 'Close'}
+          </Button>
+        </div>
+        <div className="max-h-72 space-y-2 overflow-y-auto rounded-3xl border border-slate-200 bg-slate-50/80 p-4">
+          {detail.data.messages.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{isKo ? '아직 transcript가 없습니다.' : 'No transcript yet.'}</p>
+          ) : (
+            detail.data.messages.map(message => (
+              <div key={message.sequenceNo} className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-700">
+                <span className="font-semibold capitalize text-slate-950">{message.role}:</span>{' '}
+                {message.content}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <Badge variant={detail.report.status === 'ready' ? 'default' : 'secondary'}>
+          {detail.report.status}
+        </Badge>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => onOpenStandalone(detail.report)}>
+            {isKo ? '전체 리포트 열기' : 'Open full report'}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            {isKo ? '닫기' : 'Close'}
+          </Button>
+        </div>
+      </div>
+      <InlineReport report={detail.report} />
+    </div>
+  );
+}
+
+function InlineReport({ report }: { report: Report }) {
+  const ev = report.evaluation;
+
+  return (
+    <div className="space-y-4 text-sm">
+      {ev && (
+        <div className="grid gap-3 sm:grid-cols-4">
+          {[
+            { label: 'Total', value: ev.totalScore },
+            { label: 'Grammar', value: ev.grammarScore },
+            { label: 'Vocabulary', value: ev.vocabularyScore },
+            { label: 'Fluency', value: ev.fluencyScore }
+          ].map(item => (
+            <MetricCard key={item.label} label={item.label} value={String(item.value)} />
+          ))}
+        </div>
+      )}
+      {report.summaryText && (
+        <div className="rounded-3xl border border-slate-200 bg-slate-50/80 px-4 py-4 text-sm leading-6 text-slate-700">
+          {report.summaryText}
+        </div>
+      )}
+      {report.recommendations?.length > 0 && (
+        <div className="grid gap-3">
+          {report.recommendations.map((recommendation, index) => (
+            <div key={`${recommendation}-${index}`} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
+              {recommendation}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
