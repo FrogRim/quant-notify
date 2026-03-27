@@ -58,14 +58,6 @@ const globalLimiter = rateLimit({
   message: { ok: false, error: { code: "rate_limited", message: "too many requests" } }
 });
 
-const callInitiateLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 3,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { ok: false, error: { code: "rate_limited", message: "call initiation rate limit exceeded" } }
-});
-
 app.use(globalLimiter);
 
 app.use(
@@ -90,7 +82,6 @@ app.get("/healthz", (_req, res) => {
 
 app.use("/users", usersRouter);
 app.use("/sessions", sessionsRouter);
-app.use("/calls/initiate", callInitiateLimiter);
 app.use("/calls", callsRouter);
 app.use("/workers", workersRouter);
 app.use("/reports", reportsRouter);

@@ -18,7 +18,7 @@ vi.mock("../middleware/auth", () => {
 
 vi.mock("../services/webVoiceSessionService", () => {
   return {
-    startWebVoiceSession: vi.fn(),
+    startWebVoiceSession: vi.fn(async () => ({ sessionId: "session-1" })),
     joinWebVoiceSession: vi.fn(async () => ({ sessionId: "session-1" })),
     recordWebVoiceRuntimeEvent: vi.fn(async () => ({ id: "session-1" })),
     completeWebVoiceSession: vi.fn(async () => ({ id: "session-1" }))
@@ -65,6 +65,21 @@ import callsRouter from "../routes/calls";
 import sessionsRouter from "../routes/sessions";
 
 describe("AI-expensive route rate limits", () => {
+  it("limits repeated call initiation attempts per authenticated user", async () => {
+    const app = express();
+    app.use(express.json());
+    app.use("/calls", callsRouter);
+
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const response = await request(app).post("/calls/initiate").send({ sessionId: "session-1" });
+      expect(response.status).toBe(201);
+    }
+
+    const limited = await request(app).post("/calls/initiate").send({ sessionId: "session-1" });
+    expect(limited.status).toBe(429);
+    expect(limited.body.error?.message).toBe("call initiation rate limit exceeded");
+  });
+
   it("limits repeated web voice join attempts per authenticated user", async () => {
     const app = express();
     app.use(express.json());

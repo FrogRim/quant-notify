@@ -22,6 +22,12 @@ import {
 
 const router = Router();
 
+const callInitiateLimiter = createAuthenticatedRateLimiter({
+  windowMs: 60 * 1000,
+  max: 6,
+  message: "call initiation rate limit exceeded"
+});
+
 const joinCallLimiter = createAuthenticatedRateLimiter({
   windowMs: 60 * 1000,
   max: 6,
@@ -222,7 +228,7 @@ const InitiateCallSchema = z.object({
   idempotencyKey: z.string().optional()
 });
 
-router.post("/initiate", requireAuthenticatedUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<StartCallResponse>>) => {
+router.post("/initiate", requireAuthenticatedUser, callInitiateLimiter, async (req: AuthenticatedRequest, res: Response<ApiResponse<StartCallResponse>>) => {
   const parsed = InitiateCallSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(422).json({ ok: false, error: { code: "validation_error", message: "sessionId is required" } });
