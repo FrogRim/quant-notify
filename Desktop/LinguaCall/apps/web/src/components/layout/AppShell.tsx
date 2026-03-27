@@ -13,7 +13,7 @@ export function AppShell({
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#fffaf3_0%,#ffffff_16%,#f8fafc_100%)] text-foreground">
       <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 pb-12 pt-4 sm:px-6 lg:px-8">
-        <div className="mb-8 flex items-center justify-between gap-4 rounded-full border border-white/70 bg-white/90 px-4 py-3 shadow-sm backdrop-blur">
+        <div className="relative z-40 mb-8 flex items-center justify-between gap-4 rounded-full border border-white/70 bg-white/90 px-4 py-3 shadow-sm backdrop-blur">
           <div>
             <div className="text-xs font-semibold uppercase tracking-[0.24em] text-primary/70">
               LinguaCall
@@ -22,7 +22,7 @@ export function AppShell({
               Short speaking practice for real routines
             </div>
           </div>
-          <div className="flex items-center gap-2">{headerActions}</div>
+          <div className="relative z-50 flex items-center gap-2 overflow-visible">{headerActions}</div>
         </div>
         <main className={cn('flex-1 space-y-6', className)}>{children}</main>
       </div>

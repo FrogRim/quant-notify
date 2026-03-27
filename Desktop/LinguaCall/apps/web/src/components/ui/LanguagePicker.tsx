@@ -23,7 +23,7 @@ export default function LanguagePicker() {
   };
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative z-[70]">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -37,7 +37,7 @@ export default function LanguagePicker() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-1 w-40 rounded-md border border-border bg-background shadow-md z-50">
+        <div className="absolute right-0 z-[80] mt-1 w-40 rounded-md border border-border bg-background shadow-md">
           {SUPPORTED_UI_LANGUAGES.map((lang) => (
             <button
               key={lang.code}
