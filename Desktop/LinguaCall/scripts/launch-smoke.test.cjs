@@ -2,7 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
-  buildSmokeRequests
+  buildSmokeRequests,
+  formatFailureDetail
 } = require("./launch-smoke.cjs");
 
 test("buildSmokeRequests returns health and worker checks", () => {
@@ -28,4 +29,15 @@ test("buildSmokeRequests returns health and worker checks", () => {
       }
     }
   ]);
+});
+
+test("formatFailureDetail omits response body content", () => {
+  const detail = formatFailureDetail({
+    name: "workers-run",
+    ok: false,
+    status: 500,
+    body: "{\"token\":\"secret-token-value\"}"
+  });
+
+  assert.equal(detail, "[launch-smoke] workers-run failed with status 500");
 });

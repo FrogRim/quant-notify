@@ -10,6 +10,7 @@ import {
   runReportJobs,
   type WorkerReportNotificationsResult
 } from "./reportJobs";
+import { describeErrorForLog } from "../../lib/logging";
 
 export type WorkerBatchResult = {
   dispatched: WorkerDispatchedSessionsResult;
@@ -85,7 +86,7 @@ export const startWorkerBatchLoop = ({
       const result = await runWorkerBatchOnce(limit);
       logWorkerBatchResult(result);
     } catch (error) {
-      console.error("worker-batch failed", error);
+      console.error("worker-batch failed", describeErrorForLog(error));
     } finally {
       inFlight = false;
     }

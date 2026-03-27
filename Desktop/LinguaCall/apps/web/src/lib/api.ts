@@ -62,7 +62,9 @@ export function apiClient(
       }
     }
 
-    if (!payload.ok || (!payload.data && res.status !== 204)) {
+    const hasDataField = Object.prototype.hasOwnProperty.call(payload, 'data');
+
+    if (!payload.ok || (!hasDataField && res.status !== 204)) {
       throw payload.error ?? ({ code: 'validation_error', message: 'api_error' } as ApiError);
     }
 

@@ -111,3 +111,22 @@ test("apiClient does not loop when refresh also fails", async () => {
   assert.equal(calls.filter((call) => String(call.input).endsWith("/sessions")).length, 1);
   assert.equal(refreshCalls, 1);
 });
+
+test("apiClient accepts ok responses whose data is explicitly null", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async () => {
+    return {
+      status: 200,
+      json: async () => ({ ok: true, data: null })
+    } as Response;
+  }) as typeof fetch;
+
+  try {
+    const client = apiClient(async () => null);
+    const subscription = await client.get<null>("/billing/subscription");
+    assert.equal(subscription, null);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

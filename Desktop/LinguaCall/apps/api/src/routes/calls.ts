@@ -12,6 +12,7 @@ import {
 import { store, AppError } from "../storage/inMemoryStore";
 import { requireAuthenticatedUser, AuthenticatedRequest } from "../middleware/auth";
 import { learningSessionsRepository } from "../modules/learning-sessions/repository";
+import { createAuthenticatedRateLimiter } from "../lib/authenticatedRateLimit";
 import {
   completeWebVoiceSession,
   joinWebVoiceSession,
@@ -20,6 +21,18 @@ import {
 } from "../services/webVoiceSessionService";
 
 const router = Router();
+
+const joinCallLimiter = createAuthenticatedRateLimiter({
+  windowMs: 60 * 1000,
+  max: 6,
+  message: "call join rate limit exceeded"
+});
+
+const runtimeCompleteLimiter = createAuthenticatedRateLimiter({
+  windowMs: 60 * 1000,
+  max: 12,
+  message: "call completion rate limit exceeded"
+});
 
 const readEnv = (value?: string): string | undefined => {
   const normalized = (value ?? "").trim();
@@ -252,7 +265,7 @@ router.post("/initiate", requireAuthenticatedUser, async (req: AuthenticatedRequ
   }
 });
 
-router.post("/:id/join", requireAuthenticatedUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<JoinCallResponse>>) => {
+router.post("/:id/join", requireAuthenticatedUser, joinCallLimiter, async (req: AuthenticatedRequest, res: Response<ApiResponse<JoinCallResponse>>) => {
   const { id } = req.params;
   if (!id) {
     res.status(422).json({ ok: false, error: { code: "validation_error", message: "session id is required" } });
@@ -307,7 +320,7 @@ router.post("/:id/runtime-event", requireAuthenticatedUser, async (req: Authenti
   }
 });
 
-router.post("/:id/runtime-complete", requireAuthenticatedUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Session>>) => {
+router.post("/:id/runtime-complete", requireAuthenticatedUser, runtimeCompleteLimiter, async (req: AuthenticatedRequest, res: Response<ApiResponse<Session>>) => {
   const { id } = req.params;
   const payload = req.body as Partial<CompleteWebVoiceCallPayload>;
   if (!id || !payload.endReason) {

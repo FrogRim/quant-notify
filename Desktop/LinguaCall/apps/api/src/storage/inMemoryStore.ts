@@ -48,6 +48,7 @@ import {
   toAccuracyState,
   validateCompletedTranscript
 } from "../services/sessionAccuracy";
+import { describeErrorForLog, summarizeUserIdForLog } from "../lib/logging";
 
 type OutboundCallOptions = {
   twimlUrl?: string;
@@ -2197,8 +2198,8 @@ class InMemoryStore {
       }
       console.error("endSessionCall failed", {
         callOrSessionId,
-        clerkUserId,
-        error
+        clerkUserId: summarizeUserIdForLog(clerkUserId),
+        error: describeErrorForLog(error)
       });
       throw new AppError("internal_error", "failed_to_end_call");
     } finally {
@@ -3730,7 +3731,7 @@ class InMemoryStore {
       if (error instanceof AppError) {
         throw error;
       }
-      console.error("[sendReportReadyNotifications] unexpected error:", error);
+      console.error("[sendReportReadyNotifications] unexpected error", describeErrorForLog(error));
       throw new AppError("internal_error", "failed to send report notifications");
     } finally {
       client.release();

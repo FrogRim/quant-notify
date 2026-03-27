@@ -50,6 +50,10 @@ async function runSmoke({ apiBaseUrl, workerSharedSecret }) {
   return results;
 }
 
+function formatFailureDetail(result) {
+  return `[launch-smoke] ${result.name} failed with status ${result.status}`;
+}
+
 async function main() {
   const apiBaseUrl = process.env.API_BASE_URL;
   const workerSharedSecret = process.env.WORKER_SHARED_SECRET;
@@ -68,7 +72,7 @@ async function main() {
     console.log(`[launch-smoke] ${status} ${result.name} ${result.status}`);
     if (!result.ok) {
       failed = true;
-      console.log(result.body);
+      console.log(formatFailureDetail(result));
     }
   }
 
@@ -83,5 +87,6 @@ if (require.main === module) {
 
 module.exports = {
   buildSmokeRequests,
+  formatFailureDetail,
   runSmoke
 };

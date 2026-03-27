@@ -11,8 +11,15 @@ import {
 import { store, AppError } from "../storage/inMemoryStore";
 import { requireAuthenticatedUser, AuthenticatedRequest } from "../middleware/auth";
 import { learningSessionsRepository } from "../modules/learning-sessions/repository";
+import { createAuthenticatedRateLimiter } from "../lib/authenticatedRateLimit";
 
 const router = Router();
+
+const reportGenerationLimiter = createAuthenticatedRateLimiter({
+  windowMs: 60 * 1000,
+  max: 4,
+  message: "report generation rate limit exceeded"
+});
 
 const withError = (res: Response<ApiResponse<unknown>>, message = "request_failed", code: ApiError["code"] = "validation_error") => {
   res.status(400).json({ ok: false, error: { code, message } });
@@ -130,7 +137,7 @@ router.get("/:id/messages", requireAuthenticatedUser, async (req: AuthenticatedR
   }
 });
 
-router.post("/:id/report", requireAuthenticatedUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<Report>>) => {
+router.post("/:id/report", requireAuthenticatedUser, reportGenerationLimiter, async (req: AuthenticatedRequest, res: Response<ApiResponse<Report>>) => {
   const { id } = req.params;
   if (!id) {
     res.status(422).json({ ok: false, error: { code: "validation_error", message: "session id required" } });

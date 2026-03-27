@@ -1,3 +1,4 @@
+
 # LinguaCall Frontend Redesign PRD
 
 ## 1. 문서 목적

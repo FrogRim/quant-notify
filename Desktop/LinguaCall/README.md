@@ -216,6 +216,7 @@ WORKER_BATCH_LIMIT=20
 - architecture overview: [`docs/architecture-overview.md`](docs/architecture-overview.md)
 - deploy runbook: [`docs/runbooks/vps-deploy.md`](docs/runbooks/vps-deploy.md)
 - launch E2E checklist: [`docs/runbooks/launch-e2e-checklist.md`](docs/runbooks/launch-e2e-checklist.md)
+- production readiness checklist: [`docs/runbooks/production-readiness-checklist.md`](docs/runbooks/production-readiness-checklist.md)
 - phone auth runbook: [`docs/runbooks/supabase-phone-auth-manual.md`](docs/runbooks/supabase-phone-auth-manual.md)
 - Toss sandbox manual: [`docs/runbooks/toss-sandbox-manual.md`](docs/runbooks/toss-sandbox-manual.md)
 - launch progress: [`docs/superpowers/reports/2026-03-23-auth-cutover-progress.md`](docs/superpowers/reports/2026-03-23-auth-cutover-progress.md)

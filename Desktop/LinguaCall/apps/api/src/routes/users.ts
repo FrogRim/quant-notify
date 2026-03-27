@@ -4,6 +4,7 @@ import { ApiError, ApiResponse, UserProfile } from "@lingua/shared";
 import rateLimit from "express-rate-limit";
 import { requireAuthenticatedUser, AuthenticatedRequest } from "../middleware/auth";
 import { usersRepository } from "../modules/users/repository";
+import { describeErrorForLog, summarizeUserIdForLog } from "../lib/logging";
 
 const phoneOtpLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -28,8 +29,8 @@ router.get("/me", requireAuthenticatedUser, async (req: AuthenticatedRequest, re
     res.json({ ok: true, data: user });
   } catch (error) {
     console.error("[users/me] failed_to_load_user", {
-      clerkUserId: req.clerkUserId,
-      error
+      clerkUserId: summarizeUserIdForLog(req.clerkUserId),
+      error: describeErrorForLog(error)
     });
     res.status(500).json({
       ok: false,
@@ -55,9 +56,8 @@ router.post("/me", requireAuthenticatedUser, async (req: AuthenticatedRequest, r
     res.status(201).json({ ok: true, data: user });
   } catch (error) {
     console.error("[users/me] failed_to_upsert_user", {
-      clerkUserId: req.clerkUserId,
-      body: req.body,
-      error
+      clerkUserId: summarizeUserIdForLog(req.clerkUserId),
+      error: describeErrorForLog(error)
     });
     res.status(500).json({
       ok: false,
@@ -80,7 +80,10 @@ router.patch("/me/ui-language", requireAuthenticatedUser, async (req: Authentica
     const user = await usersRepository.updateUiLanguage(req.clerkUserId, parsed.data.uiLanguage);
     res.json({ ok: true, data: user });
   } catch (error) {
-    console.error("[users/me/ui-language] failed", { clerkUserId: req.clerkUserId, error });
+    console.error("[users/me/ui-language] failed", {
+      clerkUserId: summarizeUserIdForLog(req.clerkUserId),
+      error: describeErrorForLog(error)
+    });
     res.status(500).json({ ok: false, error: { code: "validation_error", message: "failed_to_update_ui_language" } });
   }
 });
