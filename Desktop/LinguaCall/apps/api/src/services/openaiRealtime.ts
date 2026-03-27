@@ -60,6 +60,59 @@ export type OpenAIRealtimeSession = {
   model: string;
 };
 
+const REALTIME_LANGUAGE_NAMES: Record<string, string> = {
+  en: "English",
+  de: "German",
+  zh: "Mandarin Chinese",
+  es: "Spanish",
+  ja: "Japanese",
+  fr: "French"
+};
+
+const buildConversationPolicyParts = (accuracyPolicy?: SessionAccuracyPolicy) => [
+  "Prioritize keeping the conversation moving naturally until the topic feels complete.",
+  "Respond to the learner's meaning first, then ask one short follow-up that keeps the topic going.",
+  "Do not correct every turn.",
+  "Favor conversation flow over pronunciation coaching.",
+  "Only give a brief correction when the mistake blocks comprehension, repeats several times, or there is a natural pause.",
+  "If you correct, place the correction after your response instead of before it.",
+  `Use at most ${accuracyPolicy?.maxAssistantSentences ?? 3} short sentences per turn.`,
+  `Ask at most ${accuracyPolicy?.maxAssistantQuestionsPerTurn ?? 1} question per turn.`,
+  "Speak slightly slower than natural conversational speed and leave a short pause between sentences.",
+  "If you are unsure, ask a short clarifying question instead of guessing."
+];
+
+const resolveTranscriptionLanguage = (language: string): string | undefined => {
+  const normalized = language.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : undefined;
+};
+
+export const buildRealtimeTranscriptionConfig = (
+  input: CreateOpenAIRealtimeSessionInput,
+  model: string
+) => {
+  const languageName = REALTIME_LANGUAGE_NAMES[input.language] ?? "the selected target language";
+  const transcriptionLanguage = resolveTranscriptionLanguage(input.language);
+
+  return {
+    model,
+    ...(transcriptionLanguage ? { language: transcriptionLanguage } : {}),
+    prompt: [
+      `Transcribe the learner faithfully in ${languageName}.`,
+      "Preserve hesitations, incomplete phrases, and imperfect grammar.",
+      "Do not translate or rewrite the learner's wording.",
+      "Prefer the selected learning language unless the learner clearly switches languages."
+    ].join(" ")
+  };
+};
+
+export const buildRealtimeTurnDetectionConfig = () => ({
+  type: "semantic_vad" as const,
+  eagerness: "low" as const,
+  create_response: true,
+  interrupt_response: true
+});
+
 const buildGermanInstructions = (input: CreateOpenAIRealtimeSessionInput) => {
   const { topic, level, durationMinutes, accuracyPolicy } = input;
   const parts = [
@@ -69,13 +122,9 @@ const buildGermanInstructions = (input: CreateOpenAIRealtimeSessionInput) => {
     "Bleibe beim aktuellen Thema und wechsle das Thema nur, wenn der Lernende das ausdruecklich verlangt.",
     `Thema der Sitzung: ${topic}.`,
     `Sprachniveau des Lernenden: ${level}, Ziel Goethe B2.`,
-    `Sitzungsdauer: ${durationMinutes} Minuten.`,
-    `Verwende hoechstens ${accuracyPolicy?.maxAssistantSentences ?? 3} kurze Saetze pro Antwort.`,
-    `Stelle hoechstens ${accuracyPolicy?.maxAssistantQuestionsPerTurn ?? 1} Frage pro Antwort.`,
-    "Sprich etwas langsamer als normales Alltagsdeutsch und mache zwischen Saetzen eine kurze Pause.",
-    "Wenn du korrigierst, beziehe dich direkt auf den letzten Satz des Lernenden und halte die Korrektur knapp.",
-    "Wenn du unsicher bist, stelle eine kurze Rueckfrage statt zu raten."
+    `Sitzungsdauer: ${durationMinutes} Minuten.`
   ];
+  parts.push(...buildConversationPolicyParts(accuracyPolicy));
   if (accuracyPolicy?.allowedSubtopicHints.length) {
     parts.push(`Bevorzuge diese Teilthemen, wenn sie passen: ${accuracyPolicy.allowedSubtopicHints.join(", ")}.`);
   }
@@ -94,13 +143,9 @@ const buildChineseInstructions = (input: CreateOpenAIRealtimeSessionInput) => {
     "Stay on the current topic unless the learner explicitly asks to change it.",
     `Session topic: ${topic}.`,
     `Learner level: ${level}, target HSK 5.`,
-    `Session duration: ${durationMinutes} minutes.`,
-    `Use at most ${accuracyPolicy?.maxAssistantSentences ?? 3} short sentences per turn.`,
-    `Ask at most ${accuracyPolicy?.maxAssistantQuestionsPerTurn ?? 1} question per turn.`,
-    "Speak slightly slower than natural conversational speed and leave a short pause between sentences.",
-    "If you correct the learner, keep the correction short and directly tied to the learner's latest sentence.",
-    "If you are unsure, ask a short clarifying question instead of guessing."
+    `Session duration: ${durationMinutes} minutes.`
   ];
+  parts.push(...buildConversationPolicyParts(accuracyPolicy));
   if (accuracyPolicy?.allowedSubtopicHints.length) {
     parts.push(`Prefer these subtopic cues when they fit: ${accuracyPolicy.allowedSubtopicHints.join(", ")}.`);
   }
@@ -119,13 +164,9 @@ const buildSpanishInstructions = (input: CreateOpenAIRealtimeSessionInput) => {
     "Manten el tema actual y no cambies de tema salvo que el estudiante lo pida de forma explicita.",
     `Tema de la sesion: ${topic}.`,
     `Nivel del estudiante: ${level}, objetivo DELE B1.`,
-    `Duracion de la sesion: ${durationMinutes} minutos.`,
-    `Usa como maximo ${accuracyPolicy?.maxAssistantSentences ?? 3} frases cortas por turno.`,
-    `Haz como maximo ${accuracyPolicy?.maxAssistantQuestionsPerTurn ?? 1} pregunta por turno.`,
-    "Habla un poco mas despacio de lo normal y deja una breve pausa entre frases.",
-    "Si corriges, relaciona la correccion directamente con la ultima frase del estudiante.",
-    "Si no estas seguro, haz una pregunta breve de aclaracion."
+    `Duracion de la sesion: ${durationMinutes} minutos.`
   ];
+  parts.push(...buildConversationPolicyParts(accuracyPolicy));
   if (accuracyPolicy?.allowedSubtopicHints.length) {
     parts.push(`Prefiere estas pistas de subtema cuando encajen: ${accuracyPolicy.allowedSubtopicHints.join(", ")}.`);
   }
@@ -144,15 +185,10 @@ const buildEnglishInstructions = (input: CreateOpenAIRealtimeSessionInput) => {
     `Keep the learner on the current topic: ${topic}.`,
     `Target learner level: ${level}.`,
     `Target session duration: ${durationMinutes} minutes.`,
-    "Stay concise and interactive.",
-    "Speak slightly slower than natural conversational speed and leave a short pause between sentences.",
-    `Use at most ${accuracyPolicy?.maxAssistantSentences ?? 3} sentences per turn.`,
-    `Ask at most ${accuracyPolicy?.maxAssistantQuestionsPerTurn ?? 1} question per turn.`,
     "Do not switch to a new topic unless the learner explicitly asks to change the topic.",
-    "Respond to the learner's latest utterance before introducing any follow-up.",
-    "If you give a correction, keep it light and connect it directly to the learner's latest sentence.",
-    "If you are unsure, ask a clarifying question instead of guessing."
+    "Stay concise and interactive."
   ];
+  rules.push(...buildConversationPolicyParts(accuracyPolicy));
   if (accuracyPolicy?.allowedSubtopicHints.length) {
     rules.push(`Prefer these subtopic cues when useful: ${accuracyPolicy.allowedSubtopicHints.join(", ")}.`);
   }
@@ -171,13 +207,9 @@ const buildJapaneseInstructions = (input: CreateOpenAIRealtimeSessionInput) => {
     "Stay on the current topic unless the learner explicitly asks to change it.",
     `Session topic: ${topic}.`,
     `Learner level: ${level}, target JLPT N2.`,
-    `Session duration: ${durationMinutes} minutes.`,
-    `Use at most ${accuracyPolicy?.maxAssistantSentences ?? 3} short sentences per turn.`,
-    `Ask at most ${accuracyPolicy?.maxAssistantQuestionsPerTurn ?? 1} question per turn.`,
-    "Speak slightly slower than natural conversational speed and leave a short pause between sentences.",
-    "If you correct the learner, keep the correction short and directly tied to the learner's latest sentence.",
-    "If you are unsure, ask a short clarifying question instead of guessing."
+    `Session duration: ${durationMinutes} minutes.`
   ];
+  parts.push(...buildConversationPolicyParts(accuracyPolicy));
   if (accuracyPolicy?.allowedSubtopicHints.length) {
     parts.push(`Prefer these subtopic cues when they fit: ${accuracyPolicy.allowedSubtopicHints.join(", ")}.`);
   }
@@ -196,13 +228,9 @@ const buildFrenchInstructions = (input: CreateOpenAIRealtimeSessionInput) => {
     "Reste sur le sujet actuel et ne changes de sujet que si l'apprenant le demande explicitement.",
     `Sujet de la session : ${topic}.`,
     `Niveau de l'apprenant : ${level}, objectif DELF B1.`,
-    `Duree de la session : ${durationMinutes} minutes.`,
-    `Utilise au maximum ${accuracyPolicy?.maxAssistantSentences ?? 3} phrases courtes par tour.`,
-    `Pose au maximum ${accuracyPolicy?.maxAssistantQuestionsPerTurn ?? 1} question par tour.`,
-    "Parle un peu plus lentement que la vitesse normale et marque une courte pause entre les phrases.",
-    "Si tu corriges, relie la correction directement a la derniere phrase de l'apprenant.",
-    "En cas de doute, pose une breve question de clarification plutot que de deviner."
+    `Duree de la session : ${durationMinutes} minutes.`
   ];
+  parts.push(...buildConversationPolicyParts(accuracyPolicy));
   if (accuracyPolicy?.allowedSubtopicHints.length) {
     parts.push(`Privilegie ces pistes de sous-sujet si elles sont pertinentes : ${accuracyPolicy.allowedSubtopicHints.join(", ")}.`);
   }
@@ -267,13 +295,8 @@ export const createOpenAIRealtimeSession = async (
       speed: 0.9,
       modalities: ["audio", "text"],
       instructions: buildInstructions(input),
-      input_audio_transcription: {
-        model: transcriptionModel
-      },
-      turn_detection: {
-        type: "server_vad",
-        silence_duration_ms: 900
-      }
+      input_audio_transcription: buildRealtimeTranscriptionConfig(input, transcriptionModel),
+      turn_detection: buildRealtimeTurnDetectionConfig()
     })
   });
 

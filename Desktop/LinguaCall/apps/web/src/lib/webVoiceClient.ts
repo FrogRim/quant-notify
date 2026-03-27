@@ -96,6 +96,9 @@ const readRealtimeTextParts = (value: unknown): string => {
     .trim();
 };
 
+const getAssistantRealtimeKey = (payload: Record<string, unknown>): string =>
+  String(payload.response_id ?? payload.item_id ?? "assistant");
+
 export const startWebVoiceClient = async ({
   apiBase,
   bootstrap,
@@ -132,6 +135,7 @@ export const startWebVoiceClient = async ({
 
   const transcript: WebVoiceTranscriptSegment[] = [];
   const assistantBuffers = new Map<string, string>();
+  const finalizedAssistantKeys = new Set<string>();
   let finalized = false;
   let connectedAt: string | undefined;
 
@@ -176,22 +180,32 @@ export const startWebVoiceClient = async ({
     connectedAt = new Date().toISOString();
     onStateChange?.("live", "Live session connected.");
     await notifyRuntimeEvent(apiBase, bootstrap.sessionId, headers, { event: "connected" }).catch(() => undefined);
-    try {
-      dataChannel.send(JSON.stringify({
-        type: "response.create",
-        response: {
-          modalities: ["audio", "text"]
-        }
-      }));
-    } catch {
-      // best effort only
-    }
   });
 
   dataChannel.addEventListener("message", (event) => {
     try {
       const payload = JSON.parse(String(event.data)) as Record<string, unknown>;
       const eventType = String(payload.type ?? "");
+      const finalizeAssistantTurn = (key: string, value: string) => {
+        const finalText = value.trim();
+        if (!finalText || finalizedAssistantKeys.has(key)) {
+          return;
+        }
+
+        finalizedAssistantKeys.add(key);
+        assistantBuffers.delete(key);
+        pushTranscript(
+          transcript,
+          {
+            role: "assistant",
+            content: finalText,
+            timestampMs: connectedAt ? Math.max(0, Date.now() - Date.parse(connectedAt)) : null,
+            isFinal: true
+          },
+          onTranscriptChange
+        );
+      };
+
       if (eventType === "conversation.item.input_audio_transcription.completed") {
         const transcriptText = String(payload.transcript ?? "").trim();
         if (transcriptText) {
@@ -210,41 +224,30 @@ export const startWebVoiceClient = async ({
       }
 
       if (eventType === "response.audio_transcript.delta") {
-        const key = String(payload.item_id ?? payload.response_id ?? "assistant");
+        const key = getAssistantRealtimeKey(payload);
         const delta = String(payload.delta ?? "");
         assistantBuffers.set(key, `${assistantBuffers.get(key) ?? ""}${delta}`);
         return;
       }
 
       if (eventType === "response.output_text.delta") {
-        const key = String(payload.item_id ?? payload.response_id ?? "assistant");
+        const key = getAssistantRealtimeKey(payload);
         const delta = String(payload.delta ?? "");
         assistantBuffers.set(key, `${assistantBuffers.get(key) ?? ""}${delta}`);
         return;
       }
 
       if (eventType === "response.output_item.done") {
-        const key = String(payload.item_id ?? payload.response_id ?? "assistant");
+        const key = getAssistantRealtimeKey(payload);
         const itemText = readRealtimeTextParts(payload.item ?? payload.content ?? payload.output);
-        const finalText = String(itemText || assistantBuffers.get(key) || "").trim();
-        assistantBuffers.delete(key);
-        if (finalText) {
-          pushTranscript(
-            transcript,
-            {
-              role: "assistant",
-              content: finalText,
-              timestampMs: connectedAt ? Math.max(0, Date.now() - Date.parse(connectedAt)) : null,
-              isFinal: true
-            },
-            onTranscriptChange
-          );
+        if (itemText) {
+          assistantBuffers.set(key, itemText);
         }
         return;
       }
 
       if (eventType === "response.audio_transcript.done" || eventType === "response.output_text.done") {
-        const key = String(payload.item_id ?? payload.response_id ?? "assistant");
+        const key = getAssistantRealtimeKey(payload);
         const finalText = String(
           payload.transcript ??
           payload.text ??
@@ -252,19 +255,19 @@ export const startWebVoiceClient = async ({
           assistantBuffers.get(key) ??
           ""
         ).trim();
-        assistantBuffers.delete(key);
-        if (finalText) {
-          pushTranscript(
-            transcript,
-            {
-              role: "assistant",
-              content: finalText,
-              timestampMs: connectedAt ? Math.max(0, Date.now() - Date.parse(connectedAt)) : null,
-              isFinal: true
-            },
-            onTranscriptChange
-          );
-        }
+        finalizeAssistantTurn(key, finalText);
+        return;
+      }
+
+      if (eventType === "response.done") {
+        const responsePayload = payload.response as Record<string, unknown> | undefined;
+        const key = String(responsePayload?.id ?? payload.response_id ?? "assistant");
+        const finalText = String(
+          readRealtimeTextParts(responsePayload?.output ?? responsePayload?.content) ??
+          assistantBuffers.get(key) ??
+          ""
+        ).trim();
+        finalizeAssistantTurn(key, finalText);
       }
     } catch {
       // ignore malformed runtime event

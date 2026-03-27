@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildInstructions } from "../services/openaiRealtime";
+import {
+  buildInstructions,
+  buildRealtimeTranscriptionConfig,
+  buildRealtimeTurnDetectionConfig
+} from "../services/openaiRealtime";
 
 const base = {
   sessionId: "sess-1",
@@ -20,6 +24,8 @@ describe("buildInstructions", () => {
 
     expect(instructions).toContain("Conduct the entire conversation only in English.");
     expect(instructions).toContain("Open the session with the first sentence in English.");
+    expect(instructions).toContain("Do not correct every turn.");
+    expect(instructions).toContain("Favor conversation flow over pronunciation coaching.");
     expect(instructions).toContain("daily conversation");
     expect(instructions).toContain("IM3");
   });
@@ -77,6 +83,7 @@ describe("buildInstructions", () => {
 
     expect(instructions).toContain("Conduct the entire conversation only in Japanese.");
     expect(instructions).toContain("Open the session with the first sentence in Japanese.");
+    expect(instructions).toContain("Respond to the learner's meaning first");
     expect(instructions).toContain("work and everyday life");
   });
 
@@ -104,5 +111,32 @@ describe("buildInstructions", () => {
     });
 
     expect(instructions).toContain("Conduct the entire conversation only in English.");
+  });
+
+  it("builds language-aware transcription config", () => {
+    const transcription = buildRealtimeTranscriptionConfig(
+      {
+        ...base,
+        language: "ja",
+        exam: "jlpt_n2",
+        level: "N3",
+        topic: "work and everyday life"
+      },
+      "gpt-4o-mini-transcribe"
+    );
+
+    expect(transcription.model).toBe("gpt-4o-mini-transcribe");
+    expect(transcription.language).toBe("ja");
+    expect(transcription.prompt).toContain("Japanese");
+    expect(transcription.prompt).toContain("Do not translate or rewrite");
+  });
+
+  it("uses a less eager turn detection profile", () => {
+    expect(buildRealtimeTurnDetectionConfig()).toEqual({
+      type: "semantic_vad",
+      eagerness: "low",
+      create_response: true,
+      interrupt_response: true
+    });
   });
 });
