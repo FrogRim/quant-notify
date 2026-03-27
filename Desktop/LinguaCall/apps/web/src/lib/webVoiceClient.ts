@@ -120,8 +120,20 @@ const isLowQualityTranscript = (value: string): boolean => {
     return true;
   }
 
-  const fillerLike = /^(uh+|um+|mm+|hmm+|ah+|eh+|er+|음+|어+|아+|응+|え+|あ+|うー+|えー+|嗯+|啊+|呃+)$/u;
-  if (tokens.every((token) => fillerLike.test(token))) {
+  const fillerTokens = new Set([
+    "uh",
+    "um",
+    "mm",
+    "hmm",
+    "ah",
+    "eh",
+    "er",
+    "hm",
+    "uhh",
+    "umm"
+  ]);
+  const stretchedFillerLike = /^(u+h+|u+m+|m+m+|h+m+m+|a+h+|e+h+|e+r+)$/u;
+  if (tokens.every((token) => fillerTokens.has(token) || stretchedFillerLike.test(token))) {
     return true;
   }
 
@@ -218,6 +230,7 @@ export const startWebVoiceClient = async ({
     onStateChange?.("failed", "Microphone access was denied.");
     throw error;
   }
+
   const peer = new RTCPeerConnection();
   const remoteAudio = document.createElement("audio");
   remoteAudio.autoplay = true;
@@ -339,6 +352,15 @@ export const startWebVoiceClient = async ({
       if (eventType === "conversation.item.input_audio_transcription.completed") {
         const transcriptText = String(payload.transcript ?? "").trim();
         if (transcriptText) {
+          if (isLowQualityTranscript(transcriptText)) {
+            void notifyRuntimeEvent(apiBase, bootstrap.sessionId, headers, {
+              event: "transcript_filtered",
+              detail: `low_quality_transcript:${transcriptText.length}`
+            }).catch(() => undefined);
+            onStateChange?.("live", "Listening for a clearer utterance...");
+            return;
+          }
+
           pushTranscript(
             transcript,
             {
@@ -349,14 +371,6 @@ export const startWebVoiceClient = async ({
             },
             onTranscriptChange
           );
-          if (isLowQualityTranscript(transcriptText)) {
-            void notifyRuntimeEvent(apiBase, bootstrap.sessionId, headers, {
-              event: "transcript_filtered",
-              detail: `low_quality_transcript:${transcriptText.length}`
-            }).catch(() => undefined);
-            onStateChange?.("live", "Listening for a clearer utterance...");
-            return;
-          }
           queueAssistantResponse(transcriptText);
         }
         return;
@@ -473,7 +487,10 @@ export const startWebVoiceClient = async ({
     const answer = await sdpResponse.text();
     await peer.setRemoteDescription({ type: "answer", sdp: answer });
   } catch (error) {
-    await notifyRuntimeEvent(apiBase, bootstrap.sessionId, headers, { event: "media_error", detail: error instanceof Error ? error.message : "sdp_failed" }).catch(() => undefined);
+    await notifyRuntimeEvent(apiBase, bootstrap.sessionId, headers, {
+      event: "media_error",
+      detail: error instanceof Error ? error.message : "sdp_failed"
+    }).catch(() => undefined);
     await finalize(
       {
         endReason: "bootstrap_failed",
