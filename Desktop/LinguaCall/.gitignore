@@ -24,3 +24,6 @@ Thumbs.db
 
 # Claude Code local settings
 .claude/
+
+# Portfolio document — local only, do not push
+PORTFOLIO.md
