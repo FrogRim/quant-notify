@@ -393,7 +393,13 @@ export default function ScreenSession() {
       });
 
       if (resolution.kind === 'attached') {
-        syncActive(resolution.nextActiveSession);
+        // Use activeRef.current (not the stale snapshot) to preserve any state
+        // transitions (e.g. 'live') that may have fired during the await above.
+        if (activeRef.current && activeRef.current.sessionId === sessionId) {
+          syncActive({ ...activeRef.current, controller });
+        } else {
+          syncActive(resolution.nextActiveSession);
+        }
       }
     } catch (error) {
       syncActive(null);
