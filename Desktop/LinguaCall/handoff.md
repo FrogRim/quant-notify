@@ -71,7 +71,8 @@ apps/api/src/
 # 로컬
 git add ... && git commit -m "..." && git push origin main
 
-# VPS
+# VPS — 반드시 main 브랜치에서 실행
+git checkout main   # ← 항상 먼저 확인 (saas-launch-refactor 등 다른 브랜치면 새 코드 안 들어옴)
 git pull
 docker compose --env-file infra/.env.production -f infra/docker-compose.yml build web api
 docker compose --env-file infra/.env.production -f infra/docker-compose.yml up -d

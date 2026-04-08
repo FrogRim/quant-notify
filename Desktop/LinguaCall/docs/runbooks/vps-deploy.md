@@ -44,8 +44,12 @@ Key files:
 
 ## 1. Pull the code
 
+> **중요:** VPS는 반드시 `main` 브랜치에서 작업해야 합니다.
+> 다른 브랜치(예: `saas-launch-refactor`)에 있으면 새 코드가 반영되지 않습니다.
+
 ```bash
 cd ~/linguacall/Desktop/LinguaCall
+git checkout main
 git pull
 ```
 
@@ -232,7 +236,10 @@ Check:
 
 ## 11. Rolling update
 
+> **주의:** `git checkout main` 확인 후 pull 할 것.
+
 ```bash
+git checkout main
 git pull
 docker compose --env-file infra/.env.production -f infra/docker-compose.yml build web api worker
 docker compose --env-file infra/.env.production -f infra/docker-compose.yml up -d
