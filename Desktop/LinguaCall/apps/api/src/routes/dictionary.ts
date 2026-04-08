@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { ApiResponse } from "@lingua/shared";
-import { requireClerkUser, AuthenticatedRequest } from "../middleware/auth";
+import { requireAuthenticatedUser, AuthenticatedRequest } from "../middleware/auth";
 
 const router = Router();
 
@@ -9,7 +9,7 @@ type DictEntry = { pos: string; meaning: string; example: string };
 // In-process memory cache: "lang:word" → DictEntry
 const cache = new Map<string, DictEntry>();
 
-router.get("/", requireClerkUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<DictEntry>>) => {
+router.get("/", requireAuthenticatedUser, async (req: AuthenticatedRequest, res: Response<ApiResponse<DictEntry>>) => {
   const word = String((req as Request).query.word ?? "").trim().toLowerCase();
   const lang = String((req as Request).query.lang ?? "en").trim().toLowerCase();
 

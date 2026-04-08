@@ -834,6 +834,49 @@ export default function ScreenSession() {
   );
 }
 
+function TranscriptLine({ line }: { line: string }) {
+  const { getToken } = useUser();
+  const { i18n, t } = useTranslation();
+  const [translation, setTranslation] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleTranslate = async () => {
+    if (translation !== null) { setTranslation(null); return; }
+    setLoading(true);
+    try {
+      const api = apiClient(getToken);
+      const res = await api.post<{ translation: string }>('/translate', {
+        text: line,
+        targetLang: i18n.language
+      });
+      setTranslation(res.translation);
+    } catch {
+      // ignore — user can retry
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-start gap-2">
+        <p className="flex-1 text-sm leading-6 text-foreground">{line}</p>
+        <button
+          type="button"
+          onClick={() => void handleTranslate()}
+          disabled={loading}
+          className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/10 disabled:opacity-50 transition-colors"
+        >
+          {loading ? t('session.translating') : translation !== null ? t('session.translateClose') : t('session.translate')}
+        </button>
+      </div>
+      {translation !== null && (
+        <p className="text-xs leading-5 text-muted-foreground">{translation}</p>
+      )}
+    </div>
+  );
+}
+
 function LiveSessionCard({
   title,
   description,
@@ -852,10 +895,10 @@ function LiveSessionCard({
   const { t } = useTranslation();
   return (
     <SectionCard title={title} description={description}>
-      <div className="space-y-4 rounded-[28px] border border-primary/15 bg-primary/[0.05] px-5 py-5">
+      <div className="space-y-4 rounded-xl border border-primary/15 bg-primary/[0.05] px-5 py-5">
         <div className="flex items-center justify-between gap-3">
           <div className="space-y-1">
-            <div className="text-sm font-medium text-slate-950">{activeSession.note ?? activeSession.state}</div>
+            <div className="text-sm font-medium text-foreground">{activeSession.note ?? activeSession.state}</div>
             <div className="text-xs text-muted-foreground">Session ID: {activeSession.sessionId}</div>
           </div>
           <Badge variant={activeSession.state === 'live' ? 'default' : 'secondary'}>
@@ -864,15 +907,13 @@ function LiveSessionCard({
         </div>
 
         {activeSession.transcript.length > 0 ? (
-          <div className="max-h-48 space-y-2 overflow-y-auto rounded-3xl border border-white bg-white/85 p-4">
+          <div className="max-h-48 space-y-3 overflow-y-auto rounded-xl border border-border bg-card p-4">
             {activeSession.transcript.slice(-6).map((line, index) => (
-              <p key={`${line}-${index}`} className="text-sm leading-6 text-slate-700">
-                {line}
-              </p>
+              <TranscriptLine key={`${line}-${index}`} line={line} />
             ))}
           </div>
         ) : (
-          <div className="rounded-3xl border border-dashed border-white/90 bg-white/70 px-4 py-5 text-sm text-muted-foreground">
+          <div className="rounded-xl border border-dashed border-border bg-background px-4 py-5 text-sm text-muted-foreground">
             {isKo ? '첫 transcript가 들어오면 여기에 바로 표시됩니다.' : 'The first transcript line will appear here.'}
           </div>
         )}
