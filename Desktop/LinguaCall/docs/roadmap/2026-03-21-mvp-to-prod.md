@@ -1,7 +1,11 @@
 # LinguaCall — MVP → 실 서비스 전환 작업 기록
 
+> **[ARCHIVAL]** 이 문서는 2026-03-21 기준 Clerk 기반 아키텍처 전환 작업 기록이다.
+> 현재 프로덕션 스택은 Supabase Auth + VPS Docker Compose를 사용한다.
+> 현재 구조는 `README.md` 및 `docs/architecture-overview.md`를 참고할 것.
+
 **작성일**: 2026-03-21
-**상태**: Phase 1–3, 5–6 코드 구현 완료 / 외부 설정 대기 중
+**상태**: [ARCHIVAL] Clerk/Railway/Vercel 기반 — 현재 스택과 다름
 
 ---
 

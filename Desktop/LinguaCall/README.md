@@ -39,8 +39,11 @@ The current MVP launch path is complete enough to run real user tests.
 - returning users can stay signed in on the same device via refresh-session recovery
 - Toss sandbox billing working
 - session creation working
-- realtime voice session bootstrapping working
+- realtime voice session bootstrapping working with PTT (Push-to-Talk) mode
 - worker-based async report processing wired in
+- report view with grammar correction highlighting and word dictionary popover
+- session delete for terminal-status sessions
+- UI aligned to design token system (neutral palette, structured layout)
 
 Remaining work should be treated as launch hardening and product iteration, not core-stack migration.
 
@@ -164,6 +167,12 @@ POST /calls/:id/join
 POST /calls/:id/runtime-event
 POST /calls/:id/runtime-complete
 POST /calls/:id/end
+
+GET  /reports/:id
+
+GET  /dictionary?word=&lang=
+
+DELETE /sessions/:id
 
 GET  /billing/plans
 GET  /billing/subscription
