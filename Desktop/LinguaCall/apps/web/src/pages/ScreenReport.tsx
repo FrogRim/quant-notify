@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, createContext, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { Report, TranscriptMessage, ReportEvaluatorGrammarCorrection } from '@lingua/shared';
@@ -11,6 +11,8 @@ import LanguagePicker from '../components/ui/LanguagePicker';
 import { buildHighlightSegments } from '../lib/highlightHelpers';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
+
+const GetTokenContext = createContext<() => Promise<string | null>>(() => Promise.resolve(null));
 
 // ── Word Popover ──────────────────────────────────────────────────────────────
 
@@ -25,6 +27,7 @@ const dictCache = new Map<string, DictEntry | null>();
 function WordSpan({ word, lang }: { word: string; lang: string }) {
   const [popover, setPopover] = useState<PopoverEntry | null>(null);
   const spanRef = useRef<HTMLSpanElement>(null);
+  const getToken = useContext(GetTokenContext);
 
   const handleClick = async () => {
     if (popover) { setPopover(null); return; }
@@ -41,7 +44,10 @@ function WordSpan({ word, lang }: { word: string; lang: string }) {
 
     setPopover({ status: 'loading' });
     try {
-      const res = await fetch(`${API_BASE}/dictionary?word=${encodeURIComponent(clean)}&lang=${encodeURIComponent(lang)}`);
+      const token = await getToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(`${API_BASE}/dictionary?word=${encodeURIComponent(clean)}&lang=${encodeURIComponent(lang)}`, { headers });
       const payload = await res.json() as { ok: boolean; data?: DictEntry; error?: { message?: string } };
       if (payload.ok && payload.data) {
         dictCache.set(cacheKey, payload.data);
@@ -218,7 +224,11 @@ export default function ScreenReport() {
             {error && (
               <p className="text-sm text-destructive">{t('report.loadFailed', { error })}</p>
             )}
-            {report && <ReportView report={report} messages={messages} />}
+            {report && (
+              <GetTokenContext.Provider value={getToken}>
+                <ReportView report={report} messages={messages} />
+              </GetTokenContext.Provider>
+            )}
           </CardContent>
         </Card>
       </div>
