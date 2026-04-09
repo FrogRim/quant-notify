@@ -192,6 +192,7 @@ export interface Report {
   id: string;
   publicId: string;
   sessionId: string;
+  language: string;
   status: ReportStatus;
   summaryText?: string;
   recommendations: string[];

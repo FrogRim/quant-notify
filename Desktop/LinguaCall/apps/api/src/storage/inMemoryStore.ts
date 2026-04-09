@@ -49,6 +49,7 @@ import {
   validateCompletedTranscript
 } from "../services/sessionAccuracy";
 import { describeErrorForLog, summarizeUserIdForLog } from "../lib/logging";
+import { decryptPhoneFromStorage } from "../lib/piiSecurity";
 
 type OutboundCallOptions = {
   twimlUrl?: string;
@@ -145,6 +146,7 @@ interface DbReportRow {
   id: string;
   public_id: string;
   session_id: string;
+  session_language?: string;
   status: string;
   summary_text: string | null;
   recommendations: unknown;
@@ -365,8 +367,9 @@ class InMemoryStore {
     if (!raw) {
       return undefined;
     }
-    const trimmedRaw = raw.trim();
-    const normalized = sanitizeDigits(raw);
+    const decryptedRaw = user.phone_encrypted ? decryptPhoneFromStorage(raw) : raw;
+    const trimmedRaw = decryptedRaw.trim();
+    const normalized = sanitizeDigits(decryptedRaw);
     if (!normalized) {
       return undefined;
     }
@@ -485,6 +488,7 @@ class InMemoryStore {
       id: row.id,
       publicId: row.public_id,
       sessionId: row.session_id,
+      language: row.session_language ?? 'en',
       status: row.status as ReportStatus,
       summaryText: row.summary_text ?? undefined,
       recommendations,
@@ -2235,7 +2239,11 @@ class InMemoryStore {
   async getSessionReport(clerkUserId: ClerkUserId, sessionId: string): Promise<Report> {
     await this.getSession(clerkUserId, sessionId);
     const result = await this.pool.query<DbReportRow>(
-      "SELECT * FROM reports WHERE session_id = $1 LIMIT 1",
+      `SELECT r.*, s.language as session_language
+       FROM reports r
+       INNER JOIN sessions s ON s.id = r.session_id
+       WHERE r.session_id = $1
+       LIMIT 1`,
       [sessionId]
     );
     if (result.rows.length === 0) {
@@ -2317,7 +2325,7 @@ class InMemoryStore {
     const user = await this.getUser(clerkUserId);
     const result = await this.pool.query<DbReportRow>(
       `
-        SELECT r.*
+        SELECT r.*, s.language as session_language
         FROM reports r
         INNER JOIN sessions s ON s.id = r.session_id
         WHERE r.public_id = $1 AND s.user_id = $2

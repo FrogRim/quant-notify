@@ -234,7 +234,7 @@ function ReportView({ report, messages }: { report: Report; messages: Transcript
   const corrections = ev?.grammarCorrections ?? [];
   const vocabulary = ev?.vocabularyAnalysis ?? [];
   const fluency = ev?.fluencyMetrics;
-  const lang = 'en';
+  const lang = report.language || 'en';
 
   return (
     <div className="space-y-8 text-sm">
