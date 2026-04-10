@@ -13,15 +13,19 @@ export function calculateMACD(
   longPeriod = 26,
   signalPeriod = 9
 ): { macdLine: number; signalLine: number; histogram: number } {
-  if (prices.length < longPeriod) {
-    throw new Error(`MACD requires at least ${longPeriod} data points`);
+  if (prices.length < longPeriod + signalPeriod) {
+    throw new Error(`MACD requires at least ${longPeriod + signalPeriod} data points`);
   }
-  const shortEMA = ema(prices, shortPeriod);
-  const longEMA = ema(prices, longPeriod);
-  const macdLine = shortEMA - longEMA;
 
-  // 시그널 라인: 단순화 버전
-  const signalLine = macdLine * (2 / (signalPeriod + 1));
+  // Build MACD line series over all valid windows
+  const macdSeries: number[] = [];
+  for (let i = longPeriod; i <= prices.length; i++) {
+    const slice = prices.slice(0, i);
+    macdSeries.push(ema(slice, shortPeriod) - ema(slice, longPeriod));
+  }
+
+  const macdLine = macdSeries[macdSeries.length - 1];
+  const signalLine = ema(macdSeries, signalPeriod);
   const histogram = macdLine - signalLine;
 
   return { macdLine, signalLine, histogram };
