@@ -41,6 +41,10 @@ async function start() {
       port: Number(process.env.PORT ?? 3000),
       host: process.env.HOST ?? '0.0.0.0',
     });
+    const { startKISWorker } = await import('./worker/kisClient');
+    const { startBatchScheduler } = await import('./scheduler/batchRunner');
+    startKISWorker();
+    startBatchScheduler();
   } catch (err) {
     app.log.error(err);
     process.exit(1);
