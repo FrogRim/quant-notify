@@ -21,21 +21,27 @@ enum Plan {
   PAID
 }
 
+enum Sensitivity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 model Harness {
-  id          String    @id @default(cuid())
+  id          String      @id @default(cuid())
   userId      String
-  user        User      @relation(fields: [userId], references: [id])
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   ticker      String
   market      String
   conditions  Json
   logic       String
-  sensitivity String    // "LOW" | "MEDIUM" | "HIGH"
+  sensitivity Sensitivity
   summary     String
-  active      Boolean   @default(true)
+  active      Boolean     @default(true)
   lastAlertAt DateTime?
   alerts      Alert[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
   @@index([userId])
   @@index([ticker, active])
@@ -44,12 +50,15 @@ model Harness {
 model Alert {
   id          String   @id @default(cuid())
   harnessId   String
-  harness     Harness  @relation(fields: [harnessId], references: [id])
+  harness     Harness  @relation(fields: [harnessId], references: [id], onDelete: Cascade)
   userId      String
-  user        User     @relation(fields: [userId], references: [id])
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   triggeredBy String
-  priceAt     Float
+  priceAt     Decimal  @db.Decimal(18, 8)
   deeplink    String
   clicked     Boolean  @default(false)
   sentAt      DateTime @default(now())
+
+  @@index([userId])
+  @@index([harnessId])
 }
