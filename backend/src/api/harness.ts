@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../db/client';
 import { Sensitivity } from '@prisma/client';
+import { parseHarness } from '../llm/parser';
 
 const FREE_PLAN_LIMIT = 3;
 
@@ -21,6 +22,31 @@ export async function harnessRoutes(app: FastifyInstance) {
       where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
     });
+  });
+
+  // LLM 파싱 엔드포인트
+  app.post<{ Body: { input: string } }>('/harnesses/parse', async (req, reply) => {
+    const rawKey = req.headers['x-toss-user-key'];
+    const tossUserKey = Array.isArray(rawKey) ? rawKey[0] : rawKey;
+    if (!tossUserKey) return reply.status(401).send({ error: 'Unauthorized' });
+    const user = await getUserByKey(tossUserKey);
+    if (!user) return reply.status(401).send({ error: 'Unauthorized' });
+
+    if (!req.body.input || typeof req.body.input !== 'string') {
+      return reply.status(400).send({ error: 'input is required' });
+    }
+
+    const result = await parseHarness(req.body.input);
+
+    if (result.confidence < 0.6) {
+      return reply.status(422).send({
+        error: 'low_confidence',
+        message: '좀 더 구체적으로 말씀해 주실 수 있나요? 예: "10% 떨어지면" 또는 "과매도 구간에 오면"',
+        confidence: result.confidence,
+      });
+    }
+
+    return result;
   });
 
   // 하니스 생성
