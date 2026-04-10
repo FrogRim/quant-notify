@@ -9,15 +9,15 @@
   "scripts": {
     "dev": "ts-node src/server.ts",
     "build": "tsc",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@fastify/cors": "^11.2.0",
+    "@fastify/cors": "^8.5.0",
     "@prisma/adapter-pg": "^7.7.0",
     "@prisma/client": "^7.7.0",
     "axios": "^1.15.0",
@@ -26,12 +26,15 @@
     "ws": "^8.18.1"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^25.6.0",
     "@types/node-cron": "^3.0.11",
     "@types/ws": "^8.18.1",
+    "jest": "^30.3.0",
     "prisma": "^7.7.0",
+    "ts-jest": "^29.4.9",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.2",
-    "vitest": "^4.1.4"
+    "vitest": "^3.0.0"
   }
 }
