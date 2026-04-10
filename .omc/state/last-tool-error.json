@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"cd /c/Users/user/Desktop/nonamed/.worktrees/ai-investment-harness/backend && npx tsc --noEmit 2>&1\",\"timeout\":30000}",
+  "error": "Exit code 2\nsrc/db/client.ts(2,10): error TS2305: Module '\"@prisma/client\"' has no exported member 'PrismaClient'.\n[rerun: b4]",
+  "timestamp": "2026-04-10T19:53:06.133Z",
+  "retry_count": 1
+}
