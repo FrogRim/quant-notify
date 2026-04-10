@@ -15,41 +15,78 @@ export function startBatchScheduler() {
   console.log('[Scheduler] Batch scheduler started');
 }
 
+function isValidCondition(c: unknown): c is Condition {
+  if (typeof c !== 'object' || c === null) return false;
+  const obj = c as Record<string, unknown>;
+  return (
+    typeof obj.indicator === 'string' &&
+    typeof obj.operator === 'string' &&
+    typeof obj.value === 'number'
+  );
+}
+
 async function runBatch() {
-  const harnesses = await prisma.harness.findMany({
-    where: { active: true },
-    include: { user: true },
-  });
+  try {
+    const harnesses = await prisma.harness.findMany({
+      where: { active: true },
+      include: { user: true },
+    });
 
-  const now = new Date();
-  const cooldownMs = 60 * 60 * 1000; // 1 hour
+    const now = new Date();
 
-  for (const harness of harnesses) {
-    if (harness.lastAlertAt && now.getTime() - harness.lastAlertAt.getTime() < cooldownMs) {
-      continue;
-    }
+    // Skip if outside Korean market hours (09:00–15:30 KST = 00:00–06:30 UTC)
+    const utcHour = now.getUTCHours();
+    const utcMin = now.getUTCMinutes();
+    if (utcHour > 6 || (utcHour === 6 && utcMin >= 30)) return;
 
-    const batchConditions = (harness.conditions as unknown as Condition[]).filter(
-      (c) => ['MA_DEVIATION', 'RSI', 'MACD'].includes(c.indicator)
-    );
-    if (batchConditions.length === 0) continue;
+    const cooldownMs = 60 * 60 * 1000; // 1 hour
 
-    const prices = priceCache.get(harness.ticker) ?? [];
-    if (prices.length < 26) continue; // insufficient data
+    for (const harness of harnesses) {
+      if (harness.lastAlertAt && now.getTime() - harness.lastAlertAt.getTime() < cooldownMs) {
+        continue;
+      }
 
-    const currentPrice = prices[prices.length - 1];
-    const results = batchConditions.map((c) => checkBatchCondition(c, prices, currentPrice));
-    const triggered =
-      harness.logic === 'AND' ? results.every(Boolean) : results.some(Boolean);
+      const batchConditions = (harness.conditions as unknown[])
+        .filter(isValidCondition)
+        .filter((c) => ['MA_DEVIATION', 'RSI', 'MACD'].includes(c.indicator));
+      if (batchConditions.length === 0) continue;
 
-    if (triggered) {
-      const deeplink = `supertoss://stock?code=${harness.ticker}&market=${harness.market}`;
-      await sendPush({ userKey: harness.user.tossUserKey, harness, price: currentPrice, deeplink });
-      await prisma.harness.update({
-        where: { id: harness.id },
-        data: { lastAlertAt: now },
+      const prices = priceCache.get(harness.ticker) ?? [];
+
+      // Compute minimum required prices per harness
+      const minRequired = Math.max(
+        ...batchConditions.map((c) => {
+          if (c.indicator === 'MACD') return 35; // 26 + 9 (longPeriod + signalPeriod)
+          if (c.indicator === 'RSI') return (c.period ?? 14) + 1;
+          if (c.indicator === 'MA_DEVIATION') return c.period ?? 20;
+          return 0;
+        })
+      );
+      if (prices.length < minRequired) continue;
+
+      const currentPrice = prices[prices.length - 1];
+      const results = batchConditions.map((c) => {
+        try {
+          return checkBatchCondition(c, prices, currentPrice);
+        } catch (err) {
+          console.error(`[Scheduler] indicator error for harness ${harness.id} (${c.indicator}):`, err);
+          return false;
+        }
       });
+      const triggered =
+        harness.logic === 'AND' ? results.every(Boolean) : results.some(Boolean);
+
+      if (triggered) {
+        const deeplink = `supertoss://stock?code=${harness.ticker}&market=${harness.market}`;
+        await sendPush({ userKey: harness.user.tossUserKey, harness, price: currentPrice, deeplink });
+        await prisma.harness.update({
+          where: { id: harness.id },
+          data: { lastAlertAt: now },
+        });
+      }
     }
+  } catch (err) {
+    console.error('[Scheduler] runBatch failed:', err);
   }
 }
 
