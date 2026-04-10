@@ -6,8 +6,8 @@ const server = Fastify({ logger: true });
 
 server.register(cors, {
   origin: [
-    'https://*.apps.tossmini.com',
-    'https://*.private-apps.tossmini.com',
+    /^https:\/\/[^.]+\.apps\.tossmini\.com$/,
+    /^https:\/\/[^.]+\.private-apps\.tossmini\.com$/,
   ],
 });
 
@@ -17,7 +17,10 @@ server.get('/health', async () => {
 
 const start = async () => {
   try {
-    await server.listen({ port: 3000, host: '0.0.0.0' });
+    await server.listen({
+      port: Number(process.env.PORT ?? 3000),
+      host: process.env.HOST ?? '0.0.0.0',
+    });
   } catch (err) {
     server.log.error(err);
     process.exit(1);
