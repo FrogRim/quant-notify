@@ -55,6 +55,7 @@ export function Builder() {
         summary: parsed!.summary,
         sensitivity,
       }),
+    onMutate: () => setErrorMsg(''),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['harnesses'] });
       navigate('/dashboard');
@@ -115,13 +116,14 @@ export function Builder() {
           <Text typography="title2">AI가 이렇게 이해했어요</Text>
           <SummaryCard summary={parsed.summary} />
           {parsed.conditions
-            .filter((c) => c.indicator === 'PRICE_CHANGE')
-            .map((c, i) => (
+            .map((c, i) => ({ c, i }))
+            .filter(({ c }) => c.indicator === 'PRICE_CHANGE')
+            .map(({ c, i }) => (
               <ConditionSlider
                 key={i}
                 label="가격 변동 기준"
-                min={-20}
-                max={-1}
+                min={Math.min(-20, c.value)}
+                max={Math.max(-1, c.value)}
                 value={c.value}
                 unit="%"
                 onChange={(val) => updateConditionValue(i, val)}

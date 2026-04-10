@@ -16,6 +16,9 @@ export function ConditionSlider({ label, min, max, value, unit, onChange }: Prop
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
         <input
           type="range"
+          aria-label={label}
+          aria-valuetext={`${value}${unit}`}
+          step={1}
           min={min}
           max={max}
           value={value}
