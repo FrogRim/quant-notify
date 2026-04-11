@@ -1,0 +1,10 @@
+# Machine-generated agent state — never commit
+.omc/
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea

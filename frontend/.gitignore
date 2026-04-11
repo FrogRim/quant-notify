@@ -1,3 +1,6 @@
+# Machine-generated agent state — never commit
+.omc/
+
 # Logs
 logs
 *.log
