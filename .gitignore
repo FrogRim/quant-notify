@@ -1,0 +1,14 @@
+# Machine-generated agent state — never commit
+.omc/
+
+# Documentation (local-only, not committed)
+docs/decisions/
+backend/README.md
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea

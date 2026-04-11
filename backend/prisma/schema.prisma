@@ -1,0 +1,64 @@
+// backend/prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id          String    @id @default(cuid())
+  tossUserKey String    @unique
+  plan        Plan      @default(FREE)
+  harnesses   Harness[]
+  alerts      Alert[]
+  createdAt   DateTime  @default(now())
+}
+
+enum Plan {
+  FREE
+  PAID
+}
+
+enum Sensitivity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Harness {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticker      String
+  market      String
+  conditions  Json
+  logic       String
+  sensitivity Sensitivity
+  summary     String
+  active      Boolean     @default(true)
+  lastAlertAt DateTime?
+  alerts      Alert[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([ticker, active])
+}
+
+model Alert {
+  id          String   @id @default(cuid())
+  harnessId   String
+  harness     Harness  @relation(fields: [harnessId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  triggeredBy String
+  priceAt     Decimal  @db.Decimal(18, 8)
+  deeplink    String
+  clicked     Boolean  @default(false)
+  sentAt      DateTime @default(now())
+
+  @@index([userId])
+  @@index([harnessId])
+}
