@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+import Fastify, { FastifyError } from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import { userRoutes } from './api/user';
@@ -29,7 +29,7 @@ export function buildServer() {
   app.register(harnessRoutes);
   app.register(alertRoutes);
 
-  app.setErrorHandler((error, _req, reply) => {
+  app.setErrorHandler((error: FastifyError, _req, reply) => {
     const statusCode = error.statusCode ?? 500;
     if (statusCode >= 500) {
       app.log.error(error);
