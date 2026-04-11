@@ -1,24 +1,13 @@
-import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { prisma } from '../db/client';
 import { Sensitivity } from '@prisma/client';
 import { parseHarness } from '../llm/parser';
+import { requireAuth } from './auth';
 
 const FREE_PLAN_LIMIT = 3;
 
-async function requireAuth(req: FastifyRequest, reply: FastifyReply) {
-  const rawKey = req.headers['x-toss-user-key'];
-  const tossUserKey = Array.isArray(rawKey) ? rawKey[0] : rawKey;
-  if (!tossUserKey) {
-    await reply.status(401).send({ error: 'Unauthorized' });
-    return null;
-  }
-  const user = await prisma.user.findUnique({ where: { tossUserKey } });
-  if (!user) {
-    await reply.status(401).send({ error: 'Unauthorized' });
-    return null;
-  }
-  return user;
-}
+const VALID_MARKETS = new Set(['KOSPI', 'KOSDAQ', 'NASDAQ', 'NYSE']);
+const VALID_LOGIC = new Set(['AND', 'OR']);
 
 export async function harnessRoutes(app: FastifyInstance) {
   // 하니스 목록 조회
@@ -32,8 +21,11 @@ export async function harnessRoutes(app: FastifyInstance) {
     });
   });
 
-  // LLM 파싱 엔드포인트
-  app.post<{ Body: { input: string } }>('/harnesses/parse', async (req, reply) => {
+  // LLM 파싱 엔드포인트 — LLM 비용 보호: 15분에 10회 제한
+  app.post<{ Body: { input: string } }>(
+    '/harnesses/parse',
+    { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } },
+    async (req, reply) => {
     const user = await requireAuth(req, reply);
     if (!user) return;
 
@@ -62,7 +54,7 @@ export async function harnessRoutes(app: FastifyInstance) {
       app.log.error(err);
       return reply.status(503).send({ error: 'llm_unavailable', message: 'AI 서비스에 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' });
     }
-  });
+  });  // ← app.post('/harnesses/parse') 닫힘
 
   // 하니스 생성
   app.post<{
@@ -78,12 +70,27 @@ export async function harnessRoutes(app: FastifyInstance) {
     const user = await requireAuth(req, reply);
     if (!user) return;
 
+    const { ticker, market, logic, sensitivity, conditions, summary } = req.body;
+
+    if (!ticker || typeof ticker !== 'string' || ticker.length > 20) {
+      return reply.status(400).send({ error: 'ticker must be a non-empty string (max 20 chars)' });
+    }
+    if (!VALID_MARKETS.has(market)) {
+      return reply.status(400).send({ error: `market must be one of: ${[...VALID_MARKETS].join(', ')}` });
+    }
+    if (!VALID_LOGIC.has(logic)) {
+      return reply.status(400).send({ error: 'logic must be AND or OR' });
+    }
+    if (typeof summary !== 'string' || summary.length > 200) {
+      return reply.status(400).send({ error: 'summary must be a string (max 200 chars)' });
+    }
+
     const validSensitivities = Object.values(Sensitivity) as string[];
-    if (!validSensitivities.includes(req.body.sensitivity)) {
+    if (!validSensitivities.includes(sensitivity)) {
       return reply.status(400).send({ error: `Invalid sensitivity. Must be one of: ${validSensitivities.join(', ')}` });
     }
 
-    if (!Array.isArray(req.body.conditions) || req.body.conditions.length === 0) {
+    if (!Array.isArray(conditions) || conditions.length === 0) {
       return reply.status(400).send({ error: 'conditions must be a non-empty array' });
     }
 
@@ -98,12 +105,12 @@ export async function harnessRoutes(app: FastifyInstance) {
         return tx.harness.create({
           data: {
             userId: user.id,
-            ticker: req.body.ticker,
-            market: req.body.market,
-            conditions: req.body.conditions as object[],
-            logic: req.body.logic,
-            sensitivity: req.body.sensitivity as Sensitivity,
-            summary: req.body.summary,
+            ticker,
+            market,
+            conditions: conditions as object[],
+            logic,
+            sensitivity: sensitivity as Sensitivity,
+            summary,
           },
         });
       });

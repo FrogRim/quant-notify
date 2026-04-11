@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import { userRoutes } from './api/user';
 import { harnessRoutes } from './api/harness';
 import { alertRoutes } from './api/alert';
@@ -12,6 +13,12 @@ export function buildServer() {
       /^https:\/\/[^.]+\.apps\.tossmini\.com$/,
       /^https:\/\/[^.]+\.private-apps\.tossmini\.com$/,
     ],
+  });
+
+  // 전체 API: 15분에 200요청
+  app.register(rateLimit, {
+    max: 200,
+    timeWindow: '15 minutes',
   });
 
   app.get('/health', async () => {

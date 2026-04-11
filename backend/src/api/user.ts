@@ -15,6 +15,7 @@ export async function userRoutes(app: FastifyInstance) {
       create: { tossUserKey },
     });
 
-    return user;
+    // 내부 필드 노출 방지 — 클라이언트에 필요한 필드만 반환
+    return { plan: user.plan };
   });
 }

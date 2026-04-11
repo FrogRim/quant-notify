@@ -18,6 +18,7 @@
   "type": "commonjs",
   "dependencies": {
     "@fastify/cors": "^8.5.0",
+    "@fastify/rate-limit": "^9.1.0",
     "@prisma/adapter-pg": "^7.7.0",
     "@prisma/client": "^7.7.0",
     "axios": "^1.15.0",
