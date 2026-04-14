@@ -8,14 +8,15 @@ import fetch from 'node-fetch';
 const PUSH_API_URL = 'https://apps-in-toss-api.toss.im/api-partner/v1/apps-in-toss/messenger/send-message';
 const logger = getLogger({ module: 'pusher.pushClient' });
 
-// mTLS 인증서 설정
-function createAgent(): https.Agent {
-  if (process.env.NODE_ENV === 'production' && (!process.env.MTLS_CERT || !process.env.MTLS_KEY)) {
-    throw new Error('MTLS_CERT and MTLS_KEY are required in production');
+// mTLS 인증서 설정 — 인증서가 없으면 경고만 하고 agent를 undefined로 둠
+function createAgent(): https.Agent | undefined {
+  if (!process.env.MTLS_CERT || !process.env.MTLS_KEY) {
+    logger.warn('MTLS_CERT / MTLS_KEY not set — push notifications will be disabled');
+    return undefined;
   }
   return new https.Agent({
-    cert: process.env.MTLS_CERT ? readFileSync(process.env.MTLS_CERT) : undefined,
-    key:  process.env.MTLS_KEY  ? readFileSync(process.env.MTLS_KEY)  : undefined,
+    cert: readFileSync(process.env.MTLS_CERT),
+    key:  readFileSync(process.env.MTLS_KEY),
     rejectUnauthorized: true,
   });
 }
@@ -30,6 +31,11 @@ export interface SendPushParams {
 }
 
 export async function sendPush({ userKey, harness, price, deeplink }: SendPushParams): Promise<void> {
+  if (!agent) {
+    logger.warn({ harnessId: harness.id }, 'Push skipped: mTLS agent not configured');
+    return;
+  }
+
   const MAX_RETRIES = 3;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
